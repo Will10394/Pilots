@@ -567,12 +567,34 @@
 
 <script type="module">
   // ---- Amplify setup (no login — public API key auth) ----
-  import { Amplify } from 'https://esm.sh/aws-amplify@6.6.0';
-  import { generateClient } from 'https://esm.sh/aws-amplify@6.6.0/data';
+  import { Amplify } from 'https://esm.sh/aws-amplify@6.6.0?bundle';
+  import { generateClient } from 'https://esm.sh/aws-amplify@6.6.0/data?bundle';
 
-  const outputs = await fetch('./amplify_outputs.json').then(r => r.json());
-  Amplify.configure(outputs);
-  const client = generateClient();
+  let client;
+  try {
+    const res = await fetch('./amplify_outputs.json');
+    if (!res.ok) throw new Error('amplify_outputs.json returned HTTP ' + res.status);
+    const outputs = await res.json();
+    Amplify.configure(outputs);
+    client = generateClient();
+  } catch (err) {
+    console.error('Amplify initialization failed:', err);
+    document.body.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:48px;font-family:-apple-system,sans-serif;color:#e6e9ee;background:#0f1216;min-height:100vh;box-sizing:border-box;';
+    const h2 = document.createElement('h2');
+    h2.style.color = '#ff9d97';
+    h2.textContent = 'Could not connect to the shared database';
+    const p1 = document.createElement('p');
+    p1.style.cssText = 'font-family:monospace;background:#1e232b;padding:12px;border-radius:8px;';
+    p1.textContent = String(err && err.message ? err.message : err);
+    const p2 = document.createElement('p');
+    p2.style.color = '#8b93a1';
+    p2.textContent = 'This usually means amplify_outputs.json was not published alongside this page, or the backend has not finished deploying yet.';
+    wrap.appendChild(h2); wrap.appendChild(p1); wrap.appendChild(p2);
+    document.body.appendChild(wrap);
+    throw err;
+  }
 
   // ---- Seed values, used ONLY the very first time the shared tables are empty ----
   // ---- Embedded default dataset (from MPN By Host Mapping) ----
