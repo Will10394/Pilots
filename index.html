@@ -1569,90 +1569,151 @@
     downloadFile(`mpn_host_mapping_${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
   });
 
-  exportXlsxBtn.addEventListener('click', () => {
-    const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
-    const aoa = [cols];
-    allRows.forEach(r => {
-      aoa.push(cols.map(c => normalize(r[c])));
-    });
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'MPN By Host Mapping');
-    XLSX.writeFile(wb, `mpn_host_mapping_${todayStamp()}.xlsx`);
+  exportXlsxBtn.addEventListener('click', async () => {
+    exportXlsxBtn.disabled = true;
+    const originalLabel = exportXlsxBtn.textContent;
+    exportXlsxBtn.textContent = 'Exporting…';
+    try {
+      const parts = await listAllRecords(client.models.Part);
+      const rows = parts.map(toDisplayRow);
+
+      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+
+      // Group by host/server, sorted the same way the rest of the tool does
+      // (alphabetical, Uncategorized last), then merge each host's Server
+      // cells into one block — matching the original source file's layout.
+      const groups = new Map();
+      rows.forEach(r => {
+        const s = normalize(r['Server']) || 'Uncategorized';
+        if (!groups.has(s)) groups.set(s, []);
+        groups.get(s).push(r);
+      });
+      const names = Array.from(groups.keys()).sort((a,b) => {
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+      });
+
+      const aoa = [cols];
+      names.forEach(name => {
+        groups.get(name).forEach((r, idx) => {
+          aoa.push(cols.map((c, ci) => ci === 0 ? (idx === 0 ? name : '') : normalize(r[c])));
+        });
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const merges = [];
+      let rowCursor = 1;
+      names.forEach(name => {
+        const count = groups.get(name).length;
+        if (count > 1) {
+          merges.push({ s: { r: rowCursor, c: 0 }, e: { r: rowCursor + count - 1, c: 0 } });
+        }
+        rowCursor += count;
+      });
+      ws['!merges'] = merges;
+      ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 32 }, { wch: 14 }, { wch: 14 }];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'MPN By Host Mapping');
+      XLSX.writeFile(wb, `mpn_host_mapping_${todayStamp()}.xlsx`);
+    } catch (err) {
+      alert('Could not export: ' + err.message);
+    } finally {
+      exportXlsxBtn.disabled = false;
+      exportXlsxBtn.textContent = originalLabel;
+    }
   });
 
-  exportNotInEvBtn.addEventListener('click', () => {
-    const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
-    const notInEv = allRows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes');
-    if (notInEv.length === 0) {
-      alert('Everything is already marked as Yes for Added to eViridis — nothing to export.');
-      return;
+  exportNotInEvBtn.addEventListener('click', async () => {
+    exportNotInEvBtn.disabled = true;
+    try {
+      const parts = await listAllRecords(client.models.Part);
+      const rows = parts.map(toDisplayRow);
+      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+      const notInEv = rows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes');
+      if (notInEv.length === 0) {
+        alert('Everything is already marked as Yes for Added to eViridis — nothing to export.');
+        return;
+      }
+      const sorted = notInEv.slice().sort((a,b) => {
+        const sa = normalize(a["Server"]).toLowerCase();
+        const sb = normalize(b["Server"]).toLowerCase();
+        if (sa !== sb) return sa < sb ? -1 : 1;
+        return normalize(a["Part Type"]).toLowerCase().localeCompare(normalize(b["Part Type"]).toLowerCase());
+      });
+      const aoa = [cols];
+      sorted.forEach(r => aoa.push(cols.map(c => normalize(r[c]))));
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Not in eViridis');
+      XLSX.writeFile(wb, `not_in_eviridis_${todayStamp()}.xlsx`);
+    } catch (err) {
+      alert('Could not export: ' + err.message);
+    } finally {
+      exportNotInEvBtn.disabled = false;
     }
-    const sorted = notInEv.slice().sort((a,b) => {
-      const sa = normalize(a["Server"]).toLowerCase();
-      const sb = normalize(b["Server"]).toLowerCase();
-      if (sa !== sb) return sa < sb ? -1 : 1;
-      return normalize(a["Part Type"]).toLowerCase().localeCompare(normalize(b["Part Type"]).toLowerCase());
-    });
-    const aoa = [cols];
-    sorted.forEach(r => aoa.push(cols.map(c => normalize(r[c]))));
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Not in eViridis');
-    XLSX.writeFile(wb, `not_in_eviridis_${todayStamp()}.xlsx`);
   });
 
   // ---- Export new entries into the ORIGINAL workbook, preserving its formatting ----
   // Only appends rows that don't already exist in the source file (tracked via the
   // `_manual` flag) to the bottom of the same sheet. Every existing cell, every other
   // sheet, every merge and style is left completely untouched.
-  exportNewEntriesBtn.addEventListener('click', () => {
-    const newRows = allRows.filter(r => r._manual);
-    if (newRows.length === 0) {
-      alert('There are no new entries to export yet — add some MPNs first.');
-      return;
-    }
-
-    const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
-
-    // Group by host/server, sorted alphabetically (Uncategorized last), so the
-    // export is clearly organized by server type rather than a flat dump.
-    const groups = new Map();
-    newRows.forEach(r => {
-      const s = normalize(r['Server']) || 'Uncategorized';
-      if (!groups.has(s)) groups.set(s, []);
-      groups.get(s).push(r);
-    });
-    const names = Array.from(groups.keys()).sort((a,b) => {
-      if (a === 'Uncategorized') return 1;
-      if (b === 'Uncategorized') return -1;
-      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-    });
-
-    const aoa = [cols];
-    names.forEach(name => {
-      groups.get(name).forEach((r, idx) => {
-        aoa.push(cols.map((c, ci) => ci === 0 ? (idx === 0 ? name : '') : normalize(r[c])));
-      });
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    // Merge the Server column for each contiguous host block, same visual style
-    // as the rest of the tool's exports.
-    const merges = [];
-    let rowCursor = 1;
-    names.forEach(name => {
-      const count = groups.get(name).length;
-      if (count > 1) {
-        merges.push({ s: { r: rowCursor, c: 0 }, e: { r: rowCursor + count - 1, c: 0 } });
+  exportNewEntriesBtn.addEventListener('click', async () => {
+    exportNewEntriesBtn.disabled = true;
+    try {
+      const parts = await listAllRecords(client.models.Part);
+      const newRows = parts.map(toDisplayRow).filter(r => r._manual);
+      if (newRows.length === 0) {
+        alert('There are no new entries to export yet — add some MPNs first.');
+        return;
       }
-      rowCursor += count;
-    });
-    ws['!merges'] = merges;
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'New Entries');
-    XLSX.writeFile(wb, `mpn_new_entries_${todayStamp()}.xlsx`);
+      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+
+      // Group by host/server, sorted alphabetically (Uncategorized last), so the
+      // export is clearly organized by server type rather than a flat dump.
+      const groups = new Map();
+      newRows.forEach(r => {
+        const s = normalize(r['Server']) || 'Uncategorized';
+        if (!groups.has(s)) groups.set(s, []);
+        groups.get(s).push(r);
+      });
+      const names = Array.from(groups.keys()).sort((a,b) => {
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+      });
+
+      const aoa = [cols];
+      names.forEach(name => {
+        groups.get(name).forEach((r, idx) => {
+          aoa.push(cols.map((c, ci) => ci === 0 ? (idx === 0 ? name : '') : normalize(r[c])));
+        });
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      // Merge the Server column for each contiguous host block, same visual style
+      // as the rest of the tool's exports.
+      const merges = [];
+      let rowCursor = 1;
+      names.forEach(name => {
+        const count = groups.get(name).length;
+        if (count > 1) {
+          merges.push({ s: { r: rowCursor, c: 0 }, e: { r: rowCursor + count - 1, c: 0 } });
+        }
+        rowCursor += count;
+      });
+      ws['!merges'] = merges;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'New Entries');
+      XLSX.writeFile(wb, `mpn_new_entries_${todayStamp()}.xlsx`);
+    } catch (err) {
+      alert('Could not export: ' + err.message);
+    } finally {
+      exportNewEntriesBtn.disabled = false;
+    }
   });
 
   // ---- Publish current data as the new default (bake into a fresh standalone .html) ----
