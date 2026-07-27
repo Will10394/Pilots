@@ -415,6 +415,7 @@
   }
   .bulk-bar button:hover { filter: brightness(1.08); }
   .bulk-bar .clear-sel { background: none; color: var(--muted); font-weight: 500; text-decoration: underline; padding: 6px 4px; }
+  .bulk-bar .bulk-danger-btn { background: var(--no); color: #fff; }
   th.checkbox-col, td.checkbox-col { width: 32px; text-align: center; padding-left: 14px; padding-right: 4px; }
   input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 
@@ -933,6 +934,7 @@
     html += `<div class="bulk-bar${selectedIds.size ? ' show' : ''}" id="bulkBar">
         <span class="count"><span id="bulkCount">${selectedIds.size}</span> selected</span>
         <button id="bulkMarkYesBtn" type="button">Mark as Yes (in eViridis)</button>
+        <button class="bulk-danger-btn" id="bulkDeleteBtn" type="button">Delete selected</button>
         <button class="clear-sel" id="bulkClearBtn" type="button">Clear selection</button>
       </div>`;
 
@@ -1030,6 +1032,21 @@
         }
       });
     }
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    if (bulkDeleteBtn) {
+      bulkDeleteBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+        if (!confirm(`Delete ${ids.length} selected part${ids.length === 1 ? '' : 's'} from the shared database for everyone? This cannot be undone.`)) return;
+        selectedIds.clear();
+        renderContent();
+        try {
+          await runWithConcurrency(ids, (id) => client.models.Part.delete({ id }), 15);
+        } catch (err) {
+          alert('Could not delete all selected rows: ' + err.message);
+        }
+      });
+    }
     const bulkClearBtn = document.getElementById('bulkClearBtn');
     if (bulkClearBtn) {
       bulkClearBtn.addEventListener('click', () => {
@@ -1082,6 +1099,7 @@
     html += `<div class="bulk-bar${selectedIds.size ? ' show' : ''}" id="bulkBar">
         <span class="count"><span id="bulkCount">${selectedIds.size}</span> selected</span>
         <button id="bulkMarkYesBtn" type="button">Mark as Yes (in eViridis)</button>
+        <button class="bulk-danger-btn" id="bulkDeleteBtn" type="button">Delete selected</button>
         <button class="clear-sel" id="bulkClearBtn" type="button">Clear selection</button>
       </div>`;
 
@@ -1155,6 +1173,21 @@
         }
       });
     }
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    if (bulkDeleteBtn) {
+      bulkDeleteBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+        if (!confirm(`Delete ${ids.length} selected part${ids.length === 1 ? '' : 's'} from the shared database for everyone? This cannot be undone.`)) return;
+        selectedIds.clear();
+        renderContent();
+        try {
+          await runWithConcurrency(ids, (id) => client.models.Part.delete({ id }), 15);
+        } catch (err) {
+          alert('Could not delete all selected rows: ' + err.message);
+        }
+      });
+    }
     const bulkClearBtn = document.getElementById('bulkClearBtn');
     if (bulkClearBtn) {
       bulkClearBtn.addEventListener('click', () => {
@@ -1202,6 +1235,7 @@
     html += `<div class="bulk-bar${selectedIds.size ? ' show' : ''}" id="bulkBar">
         <span class="count"><span id="bulkCount">${selectedIds.size}</span> selected</span>
         <button id="bulkMarkYesBtn" type="button">Mark as Yes (in eViridis)</button>
+        <button class="bulk-danger-btn" id="bulkDeleteBtn" type="button">Delete selected</button>
         <button class="clear-sel" id="bulkClearBtn" type="button">Clear selection</button>
       </div>`;
 
@@ -1273,6 +1307,21 @@
           await runWithConcurrency(ids, (id) => client.models.Part.update({ id, addedToEviridis: 'Yes' }), 15);
         } catch (err) {
           alert('Could not mark all selected rows as Yes: ' + err.message);
+        }
+      });
+    }
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    if (bulkDeleteBtn) {
+      bulkDeleteBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+        if (!confirm(`Delete ${ids.length} selected part${ids.length === 1 ? '' : 's'} from the shared database for everyone? This cannot be undone.`)) return;
+        selectedIds.clear();
+        renderContent();
+        try {
+          await runWithConcurrency(ids, (id) => client.models.Part.delete({ id }), 15);
+        } catch (err) {
+          alert('Could not delete all selected rows: ' + err.message);
         }
       });
     }
