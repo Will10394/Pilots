@@ -664,6 +664,20 @@
     await Promise.all(runners);
   }
 
+  // Amplify's list() only returns one page at a time (a default page size,
+  // not "everything") — this walks every page via nextToken so we always
+  // work with the FULL table, not a partial first page.
+  async function listAllRecords(model) {
+    let items = [];
+    let nextToken;
+    do {
+      const res = await model.list(nextToken ? { nextToken } : {});
+      items = items.concat(res.data || []);
+      nextToken = res.nextToken;
+    } while (nextToken);
+    return items;
+  }
+
   let allRows = [];
   let activeServer = null;
   let viewMode = 'host'; // 'host' | 'notInEv'
@@ -1349,7 +1363,7 @@
   async function renderBackupsList() {
     backupsListEl.innerHTML = '<div class="mfg-empty">Loading…</div>';
     try {
-      const { data: backups } = await client.models.Backup.list();
+      const backups = await listAllRecords(client.models.Backup);
       const sorted = backups.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       if (sorted.length === 0) {
         backupsListEl.innerHTML = '<div class="mfg-empty">No backups yet — one gets created automatically each time "Replace all data from source .xlsx" runs.</div>';
@@ -1598,7 +1612,7 @@
     reloadDefaultBtn.disabled = true;
     reloadDefaultBtn.textContent = 'Refreshing…';
     try {
-      const { data: parts } = await client.models.Part.list();
+      const parts = await listAllRecords(client.models.Part);
       allRows = parts.map(toDisplayRow);
       renderSidebar();
       renderContent();
@@ -1623,7 +1637,8 @@
     newPilotBtn.disabled = true;
     newPilotBtn.textContent = 'Clearing…';
     try {
-      const idsToDelete = allRows.map(r => r._id);
+      const allParts = await listAllRecords(client.models.Part);
+      const idsToDelete = allParts.map(p => p.id);
       await runWithConcurrency(idsToDelete, (id) => client.models.Part.delete({ id }), 15);
       if (pilotConfigId) {
         await client.models.PilotConfig.update({ id: pilotConfigId, pilotName: newName.trim() });
@@ -1702,9 +1717,11 @@
         const step2 = confirm('Are you absolutely sure? This cannot be undone from within the app.');
         if (!step2) { fileInput.value = ''; return; }
 
-        // Back up the current shared data before touching anything.
-        const backupRows = allRows.map(r => {
-          const c = Object.assign({}, r);
+        // Back up the current shared data before touching anything — fetch fresh
+        // and completely from the database rather than trusting local state.
+        const currentParts = await listAllRecords(client.models.Part);
+        const backupRows = currentParts.map(p => {
+          const c = toDisplayRow(p);
           delete c._id;
           return c;
         });
@@ -1735,7 +1752,8 @@
         }
         downloadFile(`mpn_backup_before_import_${todayStamp()}.json`, JSON.stringify(backupPayload, null, 2), 'application/json');
 
-        const idsToDelete = allRows.map(r => r._id);
+        const allParts = await listAllRecords(client.models.Part);
+        const idsToDelete = allParts.map(p => p.id);
         await runWithConcurrency(idsToDelete, (id) => client.models.Part.delete({ id }), 15);
         await runWithConcurrency(newRows, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 10);
         alert(`Replaced the shared database: removed ${idsToDelete.length} old rows and added ${newRows.length} new rows from this file. A backup was saved to the shared database and downloaded to your computer.`);
