@@ -273,6 +273,20 @@
   }
   .ev-check-wrap input[type="checkbox"]:checked ~ span { color: var(--yes); }
   .ev-check-wrap input[type="checkbox"]:not(:checked) ~ span { color: var(--no); }
+  .comment-input {
+    width: 100%;
+    min-width: 140px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text);
+    font-size: 12.5px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    font-family: inherit;
+  }
+  .comment-input::placeholder { color: var(--muted); font-style: italic; }
+  .comment-input:hover { border-color: var(--border); background: var(--panel2); }
+  .comment-input:focus { outline: none; border-color: var(--accent); background: var(--panel2); }
   .empty-state {
     color: var(--muted);
     padding: 60px 20px;
@@ -530,6 +544,10 @@
           </select>
         </div>
       </div>
+      <div class="form-row">
+        <label>Comment (e.g. reason it can't be added to eViridis yet)</label>
+        <input type="text" id="f_comment" placeholder="Optional — e.g. waiting on manufacturer confirmation">
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="cancelAddBtn">Cancel</button>
         <button type="submit" class="btn-primary">Add MPN</button>
@@ -618,7 +636,7 @@
   const PILOT_NAME = /*PILOT_START*/"ReluTech Pilot"/*PILOT_END*/;
   const MFG_CONFIG = /*MFG_START*/["Adaptec", "AMD", "Areca", "ATP", "Avago", "Broadcom", "CISCO", "Compaq", "Crucial", "Dell", "ELPIDA", "Finisar", "HGST", "HLDS", "HP", "Hynix", "IBM", "Infoblox", "Intel", "Isilon", "Juniper", "Kingston", "Kioxia", "KPCB", "Liteon", "LSI", "Marvell", "Micron", "Mitsumi", "Nanya", "NEC", "Qlogic", "Samsung", "Seagate", "SK Hynix", "Smart Modular", "SuperMicro", "TEAC", "Unigen", "Unknown", "Viking", "Western Digital", "Xilinx"]/*MFG_END*/;
 
-  const COLUMNS = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+  const COLUMNS = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
 
   // Map between the tool's display-row shape and Amplify's Part records.
   function toDisplayRow(item) {
@@ -634,6 +652,7 @@
       "Description": item.description || '',
       "Added to eViridis": item.addedToEviridis || '',
       "Scannable MPN": item.scannableMpn || '',
+      "Comment": item.comment || '',
     };
   }
   function toCreateInput(row) {
@@ -647,6 +666,7 @@
       description: row["Description"] || '',
       addedToEviridis: row["Added to eViridis"] || '',
       scannableMpn: row["Scannable MPN"] || '',
+      comment: row["Comment"] || '',
       isManual: row._manual !== undefined ? row._manual : true,
     };
   }
@@ -822,6 +842,11 @@
     return `<td><label class="ev-check-wrap"><input type="checkbox" class="ev-checkbox" data-id="${escapeHtml(row._id)}" ${isYes ? 'checked' : ''}><span>${isYes ? 'Yes' : 'No'}</span></label></td>`;
   }
 
+  function renderCommentCell(row) {
+    const val = normalize(row["Comment"]);
+    return `<td><input type="text" class="comment-input" data-id="${escapeHtml(row._id)}" value="${escapeHtml(val)}" placeholder="Add a note…"></td>`;
+  }
+
   function copyMpnCell(cell) {
     const text = cell.getAttribute('data-mpn');
     if (!text) return;
@@ -859,20 +884,36 @@
 
   contentEl.addEventListener('change', async (e) => {
     const cb = e.target.closest('.ev-checkbox');
-    if (!cb) return;
-    const id = cb.getAttribute('data-id');
-    const newValue = cb.checked ? 'Yes' : 'No';
-    const label = cb.nextElementSibling;
-    if (label) label.textContent = newValue;
-    cb.disabled = true;
-    try {
-      await client.models.Part.update({ id, addedToEviridis: newValue });
-    } catch (err) {
-      cb.checked = !cb.checked;
-      if (label) label.textContent = cb.checked ? 'Yes' : 'No';
-      alert('Could not update this row: ' + err.message);
-    } finally {
-      cb.disabled = false;
+    if (cb) {
+      const id = cb.getAttribute('data-id');
+      const newValue = cb.checked ? 'Yes' : 'No';
+      const label = cb.nextElementSibling;
+      if (label) label.textContent = newValue;
+      cb.disabled = true;
+      try {
+        await client.models.Part.update({ id, addedToEviridis: newValue });
+      } catch (err) {
+        cb.checked = !cb.checked;
+        if (label) label.textContent = cb.checked ? 'Yes' : 'No';
+        alert('Could not update this row: ' + err.message);
+      } finally {
+        cb.disabled = false;
+      }
+      return;
+    }
+
+    const commentInput = e.target.closest('.comment-input');
+    if (commentInput) {
+      const id = commentInput.getAttribute('data-id');
+      const newValue = commentInput.value.trim();
+      commentInput.disabled = true;
+      try {
+        await client.models.Part.update({ id, comment: newValue });
+      } catch (err) {
+        alert('Could not save this comment: ' + err.message);
+      } finally {
+        commentInput.disabled = false;
+      }
     }
   });
 
@@ -920,7 +961,7 @@
       });
     }
 
-    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
 
     // prune selections that no longer exist
     const visibleIds = new Set(rows.map(r => r._id));
@@ -963,6 +1004,8 @@
             html += `<td class="mono">${escapeHtml(normalize(r[col]) || '—')}</td>`;
           } else if (col === 'MPN (PWB)') {
             html += renderCopyableCell(normalize(r[col]));
+          } else if (col === 'Comment') {
+            html += renderCommentCell(r);
           } else if (ci === displayCols.length - 1) {
             html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
           } else {
@@ -1089,7 +1132,7 @@
       return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
     });
 
-    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Scannable MPN","Added to eViridis"];
+    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Scannable MPN","Added to eViridis","Comment"];
 
     let html = `<div class="content-header">
         <h2>Parts Not in eViridis</h2>
@@ -1129,6 +1172,8 @@
               html += `<td class="mono">${escapeHtml(normalize(r[col]) || '—')}</td>`;
             } else if (col === 'MPN (PWB)') {
               html += renderCopyableCell(normalize(r[col]));
+            } else if (col === 'Comment') {
+              html += renderCommentCell(r);
             } else {
               html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
             }
@@ -1225,7 +1270,7 @@
       return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
     });
 
-    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
 
     let html = `<div class="content-header">
         <h2>Search results for "${escapeHtml(q)}"</h2>
@@ -1266,6 +1311,8 @@
               html += `<td class="mono">${escapeHtml(normalize(r[col]) || '—')}</td>`;
             } else if (col === 'MPN (PWB)') {
               html += renderCopyableCell(normalize(r[col]));
+            } else if (col === 'Comment') {
+              html += renderCommentCell(r);
             } else {
               html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
             }
@@ -1515,6 +1562,7 @@
       "Description": document.getElementById('f_desc').value.trim(),
       "Added to eViridis": document.getElementById('f_added').value,
       "Scannable MPN": document.getElementById('f_scan').value,
+      "Comment": document.getElementById('f_comment').value.trim(),
       "_manual": true
     };
 
@@ -1554,19 +1602,38 @@
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   }
 
-  exportJsonBtn.addEventListener('click', () => {
-    const exportRows = allRows.map(r => {
-      const rec = Object.assign({}, r);
-      delete rec._id;
-      return rec;
-    });
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      rowCount: exportRows.length,
-      rows: exportRows,
-      manufacturers: manufacturersConfig
-    };
-    downloadFile(`mpn_host_mapping_${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  exportJsonBtn.addEventListener('click', async () => {
+    exportJsonBtn.disabled = true;
+    try {
+      const parts = await listAllRecords(client.models.Part);
+      const rows = parts.map(toDisplayRow);
+      const sorted = rows.slice().sort((a, b) => {
+        const sa = normalize(a['Server']) || 'Uncategorized';
+        const sb = normalize(b['Server']) || 'Uncategorized';
+        if (sa === 'Uncategorized' && sb !== 'Uncategorized') return 1;
+        if (sb === 'Uncategorized' && sa !== 'Uncategorized') return -1;
+        if (sa.toLowerCase() !== sb.toLowerCase()) {
+          return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        return normalize(a['Part Type']).toLowerCase().localeCompare(normalize(b['Part Type']).toLowerCase());
+      });
+      const exportRows = sorted.map(r => {
+        const rec = Object.assign({}, r);
+        delete rec._id;
+        return rec;
+      });
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        rowCount: exportRows.length,
+        rows: exportRows,
+        manufacturers: manufacturersConfig
+      };
+      downloadFile(`mpn_host_mapping_${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    } catch (err) {
+      alert('Could not export: ' + err.message);
+    } finally {
+      exportJsonBtn.disabled = false;
+    }
   });
 
   exportXlsxBtn.addEventListener('click', async () => {
@@ -1577,7 +1644,7 @@
       const parts = await listAllRecords(client.models.Part);
       const rows = parts.map(toDisplayRow);
 
-      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
 
       // Group by host/server, sorted the same way the rest of the tool does
       // (alphabetical, Uncategorized last), then merge each host's Server
@@ -1612,7 +1679,7 @@
         rowCursor += count;
       });
       ws['!merges'] = merges;
-      ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 32 }, { wch: 14 }, { wch: 14 }];
+      ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 32 }, { wch: 14 }, { wch: 14 }, { wch: 28 }];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'MPN By Host Mapping');
@@ -1630,7 +1697,7 @@
     try {
       const parts = await listAllRecords(client.models.Part);
       const rows = parts.map(toDisplayRow);
-      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
       const notInEv = rows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes');
       if (notInEv.length === 0) {
         alert('Everything is already marked as Yes for Added to eViridis — nothing to export.');
@@ -1669,7 +1736,7 @@
         return;
       }
 
-      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+      const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
 
       // Group by host/server, sorted alphabetically (Uncategorized last), so the
       // export is clearly organized by server type rather than a flat dump.

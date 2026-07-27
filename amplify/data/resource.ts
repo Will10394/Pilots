@@ -27,6 +27,7 @@ const schema = a.schema({
       description: a.string(),
       addedToEviridis: a.string(),              // "Yes" | "No" | ""
       scannableMpn: a.string(),                 // "Yes" | "No" | ""
+      comment: a.string(),                       // e.g. reason it can't be added to eViridis yet
       isManual: a.boolean().default(true),      // false only for original bulk-loaded rows
     })
     .authorization((allow) => [allow.publicApiKey()]),
