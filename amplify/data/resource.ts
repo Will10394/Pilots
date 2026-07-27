@@ -50,6 +50,9 @@ export const data = defineData({
   schema,
   authorizationModes: {
     defaultAuthorizationMode: 'apiKey',
+    // Amplify requires API keys to expire — rotate before this date by
+    // redeploying. 90 days is the max in one shot; renewing is a one-line
+    // config change + redeploy, not a rebuild.
     apiKeyAuthorizationMode: { expiresInDays: 90 },
   },
 });

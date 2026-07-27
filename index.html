@@ -567,16 +567,19 @@
 
 <script type="module">
   // ---- Amplify setup (no login — public API key auth) ----
-  import { Amplify } from 'https://esm.sh/aws-amplify@latest?bundle';
-  import { generateClient } from 'https://esm.sh/aws-amplify@latest/data?bundle';
+  import { Amplify } from 'https://esm.sh/aws-amplify@latest';
+  import { generateClient } from 'https://esm.sh/aws-amplify@latest/data';
 
   let client;
   try {
     const res = await fetch('./amplify_outputs.json');
     if (!res.ok) throw new Error('amplify_outputs.json returned HTTP ' + res.status);
     const outputs = await res.json();
+    console.log('[diag] loaded amplify_outputs.json:', outputs);
     Amplify.configure(outputs);
+    console.log('[diag] Amplify.getConfig() after configure():', Amplify.getConfig());
     client = generateClient();
+    console.log('[diag] generateClient() succeeded:', client);
   } catch (err) {
     console.error('Amplify initialization failed:', err);
     document.body.innerHTML = '';
