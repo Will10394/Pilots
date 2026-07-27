@@ -454,9 +454,10 @@
       <div class="admin-dropdown" id="adminDropdown">
         <button class="admin-item" id="exportJsonBtn" type="button">Export all data (.json backup)</button>
         <button class="admin-item" id="manageMfgBtn" type="button">Manufacturers</button>
+        <button class="admin-item" id="viewBackupsBtn" type="button">View backups</button>
         <button class="admin-item" id="reloadDefaultBtn" type="button">Refresh from database</button>
         <div class="admin-divider"></div>
-        <label class="admin-item" for="fileInput">Bulk-import a source .xlsx (adds to shared data)</label>
+        <label class="admin-item danger" for="fileInput">Replace all data from source .xlsx</label>
         <input type="file" id="fileInput" accept=".xlsx,.xls">
         <button class="admin-item" id="exportXlsxBtn" type="button">Export as .xlsx</button>
         <button class="admin-item" id="exportNotInEvBtn" type="button">Export Not-in-eViridis (.xlsx)</button>
@@ -547,6 +548,17 @@
     <div id="mfgList" class="mfg-list"></div>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="closeMfgModalBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="backupsModalOverlay" class="modal-overlay">
+  <div class="modal">
+    <h3>Backups</h3>
+    <div class="modal-sub">Snapshots saved automatically before a "Replace all data" import. Stored in the shared database — visible to everyone, not just whoever created them.</div>
+    <div id="backupsList" class="mfg-list"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="closeBackupsModalBtn">Done</button>
     </div>
   </div>
 </div>
@@ -688,6 +700,10 @@
   let manufacturersConfig = MFG_CONFIG.slice();
   const pilotNameDisplay = document.getElementById('pilotNameDisplay');
   let pilotName = PILOT_NAME;
+  const viewBackupsBtn = document.getElementById('viewBackupsBtn');
+  const backupsModalOverlay = document.getElementById('backupsModalOverlay');
+  const closeBackupsModalBtn = document.getElementById('closeBackupsModalBtn');
+  const backupsListEl = document.getElementById('backupsList');
 
   function renderPilotName() {
     pilotNameDisplay.textContent = pilotName || '';
@@ -1329,6 +1345,56 @@
     newMfgInput.focus();
   });
 
+  // ---- Backups modal ----
+  async function renderBackupsList() {
+    backupsListEl.innerHTML = '<div class="mfg-empty">Loading…</div>';
+    try {
+      const { data: backups } = await client.models.Backup.list();
+      const sorted = backups.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      if (sorted.length === 0) {
+        backupsListEl.innerHTML = '<div class="mfg-empty">No backups yet — one gets created automatically each time "Replace all data from source .xlsx" runs.</div>';
+        return;
+      }
+      backupsListEl.innerHTML = sorted.map(b => {
+        const when = b.createdAt ? new Date(b.createdAt).toLocaleString() : '';
+        return `<div class="mfg-row" data-id="${escapeHtml(b.id)}">
+            <span class="mfg-name-wrap"><span>${escapeHtml(b.label || 'Backup')}</span><span class="in-use-tag">${b.rowCount ?? '?'} rows</span></span>
+            <span style="display:flex; gap:12px; align-items:center;">
+              <span style="color:var(--muted); font-size:11.5px;">${escapeHtml(when)}</span>
+              <button class="download-backup-btn" type="button" data-id="${escapeHtml(b.id)}">Download</button>
+            </span>
+          </div>`;
+      }).join('');
+      backupsListEl.querySelectorAll('.download-backup-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const rec = sorted.find(b => b.id === id);
+          if (!rec) return;
+          let parsed = { rows: [], manufacturers: [] };
+          try { parsed = JSON.parse(rec.data || '{}'); } catch (e) { /* leave empty */ }
+          const payload = {
+            label: rec.label,
+            backedUpAt: rec.createdAt,
+            rowCount: rec.rowCount,
+            rows: parsed.rows || [],
+            manufacturers: parsed.manufacturers || []
+          };
+          const safeName = (rec.label || 'backup').replace(/[^a-z0-9]+/gi, '_');
+          downloadFile(`${safeName}.json`, JSON.stringify(payload, null, 2), 'application/json');
+        });
+      });
+    } catch (err) {
+      backupsListEl.innerHTML = `<div class="mfg-empty">Could not load backups: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  viewBackupsBtn.addEventListener('click', () => {
+    backupsModalOverlay.classList.add('open');
+    renderBackupsList();
+  });
+  closeBackupsModalBtn.addEventListener('click', () => backupsModalOverlay.classList.remove('open'));
+  backupsModalOverlay.addEventListener('click', (e) => { if (e.target === backupsModalOverlay) backupsModalOverlay.classList.remove('open'); });
+
   function closeMfgModal() {
     mfgModalOverlay.classList.remove('open');
   }
@@ -1601,6 +1667,22 @@
     return newRows;
   }
 
+  // Duplicate protection for bulk operations: collapse rows that share the same
+  // host + MPN + APN + description before ever sending create calls to the
+  // database, so a source file with repeated rows can't create duplicates.
+  function dedupeRows(rows) {
+    const seen = new Set();
+    const out = [];
+    rows.forEach(r => {
+      const key = [normalize(r['Server']), normalize(r['MPN (PWB)']), normalize(r['APN (DPN)']), normalize(r['Description'])]
+        .join('||').toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(r);
+    });
+    return out;
+  }
+
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1609,17 +1691,59 @@
       try {
         const wb = XLSX.read(evt.target.result, { type: 'array' });
         const sheetName = findMpnSheetName(wb);
-        const newRows = parseSheetToRows(wb.Sheets[sheetName]);
-        if (!confirm(`This will add ${newRows.length} rows to the SHARED database for everyone. Continue?`)) {
-          fileInput.value = '';
-          return;
+        const newRows = dedupeRows(parseSheetToRows(wb.Sheets[sheetName]));
+
+        const step1 = confirm(
+          `This will DELETE all ${allRows.length} parts currently in the shared database for EVERYONE ` +
+          `and replace them with the ${newRows.length} rows from this file.\n\n` +
+          `A backup will be saved (in the shared database, and downloaded to your computer) first.\n\nContinue?`
+        );
+        if (!step1) { fileInput.value = ''; return; }
+        const step2 = confirm('Are you absolutely sure? This cannot be undone from within the app.');
+        if (!step2) { fileInput.value = ''; return; }
+
+        // Back up the current shared data before touching anything.
+        const backupRows = allRows.map(r => {
+          const c = Object.assign({}, r);
+          delete c._id;
+          return c;
+        });
+        const backupLabel = `${pilotName || 'MPN Host Mapping'} — ${todayStamp()}`;
+        const backupPayload = {
+          backedUpAt: new Date().toISOString(),
+          reason: 'Automatic backup taken before a bulk .xlsx import replaced the shared database',
+          label: backupLabel,
+          rowCount: backupRows.length,
+          rows: backupRows,
+          manufacturers: manufacturersConfig
+        };
+
+        fileInput.disabled = true;
+        try {
+          await client.models.Backup.create({
+            label: backupLabel,
+            rowCount: backupRows.length,
+            data: JSON.stringify({ rows: backupRows, manufacturers: manufacturersConfig })
+          });
+        } catch (backupErr) {
+          console.error('Could not save backup to the shared database:', backupErr);
+          if (!confirm('Could not save a backup to the shared database (see console for details). Continue anyway with just a local download backup?')) {
+            fileInput.disabled = false;
+            fileInput.value = '';
+            return;
+          }
         }
+        downloadFile(`mpn_backup_before_import_${todayStamp()}.json`, JSON.stringify(backupPayload, null, 2), 'application/json');
+
+        const idsToDelete = allRows.map(r => r._id);
+        await runWithConcurrency(idsToDelete, (id) => client.models.Part.delete({ id }), 15);
         await runWithConcurrency(newRows, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 10);
-        alert(`Added ${newRows.length} rows to the shared database.`);
+        alert(`Replaced the shared database: removed ${idsToDelete.length} old rows and added ${newRows.length} new rows from this file. A backup was saved to the shared database and downloaded to your computer.`);
       } catch (err) {
         alert('Could not parse or import that file: ' + err.message);
       } finally {
         fileInput.value = '';
+        fileInput.disabled = false;
       }
     };
     reader.readAsArrayBuffer(file);
@@ -1632,8 +1756,9 @@
     try {
       const { data: existingParts } = await client.models.Part.list({ limit: 1 });
       if (existingParts.length === 0 && EMBEDDED_DATA.length > 0) {
-        contentEl.innerHTML = `<div class="empty-state">First-time setup — loading ${EMBEDDED_DATA.length} starter parts into the shared database. This only happens once and may take a minute…</div>`;
-        await runWithConcurrency(EMBEDDED_DATA, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 15);
+        const seedRows = dedupeRows(EMBEDDED_DATA);
+        contentEl.innerHTML = `<div class="empty-state">First-time setup — loading ${seedRows.length} starter parts into the shared database. This only happens once and may take a minute…</div>`;
+        await runWithConcurrency(seedRows, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 15);
       }
 
       const { data: existingMfgs } = await client.models.Manufacturer.list({ limit: 1 });

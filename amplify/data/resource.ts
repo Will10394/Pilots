@@ -42,6 +42,14 @@ const schema = a.schema({
       pilotName: a.string(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
+
+  Backup: a
+    .model({
+      label: a.string().required(),       // e.g. "ReluTech Pilot — 2026-07-27"
+      rowCount: a.integer(),
+      data: a.string(),                    // JSON snapshot: { rows, manufacturers }
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
