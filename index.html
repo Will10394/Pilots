@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MPN by Host Mapping Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --panel2: #1e232b;
+    --border: #2a303a;
+    --text: #e6e9ee;
+    --muted: #8b93a1;
+    --accent: #4f8cff;
+    --accent2: #35c98f;
+    --yes: #35c98f;
+    --no: #e0554f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #12161c, #0f1216);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  header .sub {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 14px;
+  }
+  .toolbar input[type="text"], .toolbar select {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .toolbar input[type="text"] {
+    width: 240px;
+  }
+  .toolbar select { min-width: 160px; }
+  .file-btn {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .file-btn:hover { border-color: var(--accent); }
+  .file-btn.accent { border-color: rgba(224,85,79,0.4); color: #ff9d97; }
+  .file-btn.accent:hover { border-color: var(--no); background: rgba(224,85,79,0.1); }
+  .admin-menu-wrap { position: relative; }
+  .admin-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 240px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    padding: 6px;
+    z-index: 30;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .admin-dropdown.open { display: flex; }
+  .admin-dropdown .admin-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 7px;
+    font-size: 13px;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  .admin-dropdown .admin-item:hover { background: var(--panel); }
+  .admin-dropdown .admin-item.danger { color: #ff9d97; }
+  .admin-dropdown .admin-item.danger:hover { background: rgba(224,85,79,0.14); }
+  .admin-dropdown input[type="file"] { display: none; }
+  .admin-divider { height: 1px; background: var(--border); margin: 6px 4px; }
+  .pilot-tag {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent2);
+    background: rgba(53,201,143,0.12);
+    border: 1px solid rgba(53,201,143,0.3);
+    padding: 3px 10px;
+    border-radius: 999px;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+  .file-btn.danger { border-color: rgba(224,85,79,0.4); color: #ff9d97; }
+  .file-btn.danger:hover { border-color: var(--no); background: rgba(224,85,79,0.14); }
+  #fileInput { display: none; }
+  .stat {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  main {
+    display: flex;
+    height: calc(100vh - 128px);
+  }
+  #sidebar {
+    width: 300px;
+    min-width: 220px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--panel);
+    padding: 10px 0;
+  }
+  #sidebar .group-label {
+    padding: 8px 16px 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .server-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 16px;
+    cursor: pointer;
+    font-size: 13.5px;
+    border-left: 3px solid transparent;
+    color: var(--text);
+  }
+  .server-item:hover { background: var(--panel2); }
+  .server-item.active {
+    background: var(--panel2);
+    border-left-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .server-item .count {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .server-item.active .count { color: var(--accent); }
+  .server-item.nav-special {
+    font-weight: 600;
+    color: #ff9d97;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    padding-bottom: 11px;
+  }
+  .server-item.nav-special .count {
+    background: rgba(224,85,79,0.18);
+    color: #ff9d97;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+  .server-item.nav-special.active {
+    background: rgba(224,85,79,0.1);
+    border-left-color: var(--no);
+    color: #ffb3ae;
+  }
+  #content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 28px 40px;
+  }
+  .content-header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .content-header h2 {
+    margin: 0;
+    font-size: 19px;
+  }
+  .content-header .count-pill {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  thead th {
+    text-align: left;
+    background: var(--panel2);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 10px 12px;
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  thead th .arrow { opacity: 0.5; font-size: 10px; margin-left: 4px; }
+  tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:hover { background: var(--panel2); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.row-not-ev { background: rgba(224,85,79,0.08); box-shadow: inset 3px 0 0 var(--no); }
+  tbody tr.row-not-ev:hover { background: rgba(224,85,79,0.16); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.yes { background: rgba(53,201,143,0.15); color: var(--yes); }
+  .badge.no { background: rgba(224,85,79,0.15); color: var(--no); }
+  .badge.blank { background: rgba(139,147,161,0.12); color: var(--muted); }
+  .mono { font-family: "SF Mono", Consolas, Menlo, monospace; font-size: 12.5px; color: #cfd6e0; }
+  .mpn-copy { cursor: pointer; position: relative; }
+  .mpn-copy:hover { color: var(--accent); text-decoration: underline; text-decoration-style: dotted; }
+  .mpn-copy.copied { color: var(--accent2); font-weight: 700; text-decoration: none; }
+  .ev-check-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .ev-check-wrap input[type="checkbox"]:checked ~ span { color: var(--yes); }
+  .ev-check-wrap input[type="checkbox"]:not(:checked) ~ span { color: var(--no); }
+  .empty-state {
+    color: var(--muted);
+    padding: 60px 20px;
+    text-align: center;
+    font-size: 14px;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #2a303a; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .badge.manual { background: rgba(79,140,255,0.15); color: var(--accent); margin-left: 6px; }
+  .row-actions button {
+    background: none;
+    border: none;
+    color: var(--no);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+  }
+  .row-actions button:hover { text-decoration: underline; }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(5,7,10,0.6);
+    z-index: 100;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 26px;
+    width: 100%;
+    max-width: 560px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal h3 { margin: 0 0 4px; font-size: 18px; }
+  .modal-sub { color: var(--muted); font-size: 12.5px; margin-bottom: 18px; }
+  .form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .form-row label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .form-row input, .form-row select {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: 13.5px;
+  }
+  .form-row input:focus, .form-row select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+  .btn-primary, .btn-secondary {
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+  }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-secondary { background: var(--panel2); color: var(--text); }
+  .btn-secondary:hover { border-color: var(--muted); }
+  #fileInput { display: none; }
+
+  .mfg-add-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .mfg-add-row input {
+    flex: 1;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: 13.5px;
+  }
+  .mfg-add-row input:focus { outline: none; border-color: var(--accent); }
+  .mfg-list {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .mfg-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    font-size: 13.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mfg-row:last-child { border-bottom: none; }
+  .mfg-row .mfg-name-wrap { display: flex; align-items: center; gap: 8px; }
+  .mfg-row .in-use-tag {
+    font-size: 10.5px;
+    color: var(--muted);
+    background: var(--panel2);
+    padding: 1px 7px;
+    border-radius: 999px;
+  }
+  .mfg-row button {
+    background: none;
+    border: none;
+    color: var(--no);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .mfg-row button:hover { text-decoration: underline; }
+  .mfg-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  .bulk-bar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    background: rgba(79,140,255,0.1);
+    border: 1px solid rgba(79,140,255,0.35);
+    padding: 9px 14px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .bulk-bar.show { display: flex; }
+  .bulk-bar .count { font-weight: 600; color: var(--text); }
+  .bulk-bar button {
+    background: var(--accent2);
+    border: none;
+    color: #08211a;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 12.5px;
+  }
+  .bulk-bar button:hover { filter: brightness(1.08); }
+  .bulk-bar .clear-sel { background: none; color: var(--muted); font-weight: 500; text-decoration: underline; padding: 6px 4px; }
+  th.checkbox-col, td.checkbox-col { width: 32px; text-align: center; padding-left: 14px; padding-right: 4px; }
+  input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+
+  .host-group { margin-bottom: 26px; }
+  .host-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffb3ae;
+    border-bottom: 1px solid rgba(224,85,79,0.3);
+  }
+  .host-group table { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MPN by Host Mapping <span id="pilotNameDisplay" class="pilot-tag"></span></h1>
+  <div class="sub">Browse parts grouped by server / host model. Add MPNs, export your additions at end of day, and hand them to whoever hosts this tool.</div>
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Search all hosts: MPN, APN, description, mfg...">
+    <select id="partTypeFilter"><option value="">All part types</option></select>
+    <select id="scannableFilter">
+      <option value="">Scannable: All</option>
+      <option value="Yes">Scannable: Yes</option>
+      <option value="No">Scannable: No</option>
+    </select>
+    <button class="file-btn" id="addMpnBtn" type="button">+ Add MPN</button>
+    <button class="file-btn" id="exportNewEntriesBtn" type="button">Export new entries (.xlsx)</button>
+
+    <div class="admin-menu-wrap">
+      <button class="file-btn" id="adminMenuBtn" type="button">☰ Admin</button>
+      <div class="admin-dropdown" id="adminDropdown">
+        <button class="admin-item" id="exportJsonBtn" type="button">Export all data (.json backup)</button>
+        <button class="admin-item" id="manageMfgBtn" type="button">Manufacturers</button>
+        <button class="admin-item" id="reloadDefaultBtn" type="button">Refresh from database</button>
+        <div class="admin-divider"></div>
+        <label class="admin-item" for="fileInput">Bulk-import a source .xlsx (adds to shared data)</label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <button class="admin-item" id="exportXlsxBtn" type="button">Export as .xlsx</button>
+        <button class="admin-item" id="exportNotInEvBtn" type="button">Export Not-in-eViridis (.xlsx)</button>
+        <div class="admin-divider"></div>
+        <button class="admin-item danger" id="newPilotBtn" type="button">Start new pilot (clean slate for everyone)</button>
+      </div>
+    </div>
+    <span class="stat" id="statLine"></span>
+  </div>
+</header>
+
+<div id="modalOverlay" class="modal-overlay">
+  <div class="modal">
+    <h3>Add a new MPN</h3>
+    <div class="modal-sub">Fill in the fields below. Pick an existing host model or type a brand new one.</div>
+    <form id="addMpnForm">
+      <div class="form-row">
+        <label>Server / Host model</label>
+        <input type="text" id="f_server" list="serverOptions" placeholder="e.g. PowerEdge R940, a new host name, or leave blank for Uncategorized">
+        <datalist id="serverOptions"></datalist>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Manufacturer</label>
+          <input type="text" id="f_mfg" list="mfgOptions" placeholder="e.g. Dell">
+          <datalist id="mfgOptions"></datalist>
+        </div>
+        <div class="form-row">
+          <label>COO</label>
+          <input type="text" id="f_coo" placeholder="e.g. CN">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>APN (DPN)</label>
+          <input type="text" id="f_apn" placeholder="e.g. 0NHDXG">
+        </div>
+        <div class="form-row">
+          <label>MPN (PWB)</label>
+          <input type="text" id="f_mpn" placeholder="e.g. 0101A0F00-000-G" required>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Part Type</label>
+          <input type="text" id="f_parttype" list="partTypeOptions" placeholder="e.g. Backplane">
+          <datalist id="partTypeOptions"></datalist>
+        </div>
+        <div class="form-row">
+          <label>Description</label>
+          <input type="text" id="f_desc" placeholder="Short description">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Added to eViridis</label>
+          <select id="f_added">
+            <option value="">—</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Scannable MPN</label>
+          <select id="f_scan">
+            <option value="">—</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="cancelAddBtn">Cancel</button>
+        <button type="submit" class="btn-primary">Add MPN</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="mfgModalOverlay" class="modal-overlay">
+  <div class="modal">
+    <h3>Manufacturers</h3>
+    <div class="modal-sub">Manage the list of manufacturers offered when adding an MPN. Add new ones or remove ones you don't need.</div>
+    <div class="mfg-add-row">
+      <input type="text" id="f_new_mfg" placeholder="Add a manufacturer, e.g. Nvidia">
+      <button type="button" class="btn-primary" id="addMfgBtn">Add</button>
+    </div>
+    <div id="mfgList" class="mfg-list"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="closeMfgModalBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div id="sidebar">
+    <div class="group-label">Views</div>
+    <div id="notInEvNavItem" class="server-item nav-special">
+      <span>⚠ Not in eViridis</span><span class="count" id="notInEvCount">0</span>
+    </div>
+    <div class="group-label" style="margin-top:8px;">Server / Host Models</div>
+    <div id="serverList"></div>
+  </div>
+  <div id="content">
+    <div class="empty-state">Select a server model on the left to view its parts.</div>
+  </div>
+</main>
+
+<script type="module">
+  // ---- Amplify setup (no login — public API key auth) ----
+  import { Amplify } from 'https://esm.sh/aws-amplify@6.6.0';
+  import { generateClient } from 'https://esm.sh/aws-amplify@6.6.0/data';
+
+  const outputs = await fetch('./amplify_outputs.json').then(r => r.json());
+  Amplify.configure(outputs);
+  const client = generateClient();
+
+  // ---- Seed values, used ONLY the very first time the shared tables are empty ----
+  // ---- Embedded default dataset (from MPN By Host Mapping) ----
+  const EMBEDDED_DATA = /*DATA_START*/[{"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0NHDXG", "MPN (PWB)": "0101A0F00-000-G", "Part Type": "Backplane", "Description": "Rear hard drive backplane board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "0101A0G00-000-G", "Part Type": "Backplane", "Description": "Front 12 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "0101A1E00-000-G", "Part Type": "Backplane", "Description": "Backplane", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "02RRVJ", "MPN (PWB)": "01019YT00-000-G", "Part Type": "Backplane", "Description": "Backplane Extender", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DTCVP", "MPN (PWB)": "01019YV00-000-G", "Part Type": "Backplane", "Description": "Front 24 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "LSI", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01040TF00-000-G", "Part Type": "Adapter", "Description": "PCIe Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "0R1N53", "MPN (PWB)": "PX2810703-00-B", "Part Type": "Adapter", "Description": "Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Qlogic", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "PX2810403-78  C", "Part Type": "Adapter", "Description": "QLogic 8Gb Fibre Channel Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "04KKCY", "MPN (PWB)": "0101A0E00-000-G", "Part Type": "Riser", "Description": "3 slot riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0N11WF", "MPN (PWB)": "0101A0D00-000-G", "Part Type": "Riser", "Description": "2 slot riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0800JH", "MPN (PWB)": "0101A0L00-000-G", "Part Type": "Riser", "Description": "1 slot riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "07H4CN", "MPN (PWB)": "01040WD00-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0YWMX8", "MPN (PWB)": "01019YU00-000-G", "Part Type": "PCB", "Description": "Power button assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0NF6F3", "MPN (PWB)": "01019YY00-000-G", "Part Type": "PCB", "Description": "Front Seconday Output assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0RC6XN", "MPN (PWB)": "43FX3", "Part Type": "PCB", "Description": "rear SD card reader ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "072T6D", "MPN (PWB)": "38Y6R", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PX2810403-83  D", "Part Type": "NIC", "Description": "QLE2560 8Gb Fibre Channel Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "KCC-REM-CPU-G28429", "Part Type": "NIC", "Description": "10Gb Da/sfp+ server adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0C63DV", "MPN (PWB)": "KCC-REM-CPU-G63668", "Part Type": "NIC", "Description": "sfp network adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CPU-E69818 (B)", "Part Type": "NIC", "Description": "sfp network adapter", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "H91379-001", "Part Type": "PCBA", "Description": "Network Daughter Card (rNDC)", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01019D800-000-G", "Part Type": "PCBA", "Description": "PCIe SSD/NVMe Extender Expansion Card", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "16RF5", "Part Type": "PCBA", "Description": "Front panel controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0FM487", "MPN (PWB)": "KCC-REM-BCM-95720AD2000G", "Part Type": "PCBA", "Description": "Network Daughter Card (rNDC)", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "CM8066002031103", "Part Type": "CPU", "Description": "Intel Xeon E5-2650V4", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064401439416", "Part Type": "CPU", "Description": "Intel Xeon E5-2690V3    SPEC: SR1XN", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064401830901", "Part Type": "CPU", "Description": "Intel Xeon E5-2640V3", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "E5-2660 V3", "Part Type": "CPU", "Description": "CPU", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8064401807100", "Part Type": "CPU", "Description": "Intel E5-2697V3", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8066002645900", "Part Type": "CPU", "Description": "Intel E5-2697AV4", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "PH", "APN (DPN)": "00RVDT", "MPN (PWB)": "HDEAG02DBA51", "Part Type": "HDD", "Description": "300 GB HDD", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "PH", "APN (DPN)": "", "MPN (PWB)": "HDEAG02DAA51", "Part Type": "HDD", "Description": "HDD", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Dell", "COO": "TH", "APN (DPN)": "", "MPN (PWB)": "1FF200-151", "Part Type": "HDD", "Description": "1.2 TB HDD", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PLRXPL-VC-SH4-23-N-QL", "Part Type": "AWS OPTICAL MODULE", "Description": "ATGBICS AFBR-709DMZ-IN2-C 10GBASE-SR/SW SFP+ 850nm 300m", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Finisar", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "FTLF8528P3BCV-QL", "Part Type": "AWS OPTICAL MODULE", "Description": "Finisar 8.5Gbps Multi-Mode Fiber 150m 850nm Duplex LC Connector SFP+ Transceiver Module for QLogic", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "FTLX8571D3BCVIT1", "Part Type": "AWS OPTICAL MODULE", "Description": "SFP+ Transceiver Module 1000BASE-SX, 10GBASE-SR Plug-in Module Ref", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730xd", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "AFBR-709DMZ-IN2", "Part Type": "AWS OPTICAL MODULE", "Description": "ATGBICS AFBR-709DMZ-IN2-C 10GBASE-SR/SW SFP+ 850nm 300m", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "PTWDY", "Part Type": "Motherboard", "Description": "Dell Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "4T3JF", "Part Type": "Motherboard", "Description": "Dell Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016EC00-000-G", "Part Type": "Backplane", "Description": "Front 12 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016EE00-000-G", "Part Type": "Backplane", "Description": "Front 24 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016ET00-000-G", "Part Type": "Backplane", "Description": "Addition to Front Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016EF00-000-G", "Part Type": "Backplane", "Description": "Rear media backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169P00-000-G", "Part Type": "Riser", "Description": "2 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169W00-000-G", "Part Type": "Riser", "Description": "3 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169R00-000-G", "Part Type": "Riser", "Description": "1 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8062101122501", "Part Type": "CPU", "Description": "intel xeon E5-2690", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8063501288100", "Part Type": "CPU", "Description": "intel xeon E5-2630V2", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8063501287304", "Part Type": "CPU", "Description": "intel xeon E5-2667 V2", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8062107184424", "Part Type": "CPU", "Description": "intel xeon E5-2680", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "01040EV00-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "01040LK00-000-G", "Part Type": "RAID", "Description": "PCIE RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01040LW00-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016EG00-000-G", "Part Type": "PCBA", "Description": "Front Power Button assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "03R0F", "Part Type": "PCBA", "Description": "rear SD card reader ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016ED00-000-G", "Part Type": "PCBA", "Description": "Front Video Output Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CPU-E69818 (B)", "Part Type": "NIC", "Description": "Network Card", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PX2810403-21  G", "Part Type": "Adapter", "Description": "QLogic 8Gb Fibre Channel Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R720xd", "Manufacturer": "HP", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "FTLF8528P2BNV-HP", "Part Type": "AWS Optical Module", "Description": "850 nm laser SFP 8G", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R720xd", "Manufacturer": "Avago", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "AFBR-57D7AMZ-QL", "Part Type": "AWS Optical Module", "Description": "850 nm laser SFP 8G", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R720xd", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "AFBR-57D9AMZ-QL", "Part Type": "AWS Optical Module", "Description": "850 nm laser SFP 8G", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "FTLX8571D3BCV-IT", "Part Type": "AWS Optical Module", "Description": "850 nm laser SFP", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "00XW5C", "Part Type": "Memory", "Description": "DELL iDRAC vFlash 8GB SD card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "0T6NY4", "Part Type": "SSD", "Description": "16GB SD Card", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "9SV066-150", "Part Type": "HDD", "Description": "HDD", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R720xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "9WG066-150", "Part Type": "HDD", "Description": "600 GB SAS 6Gbps", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "FG4X5", "Part Type": "Backplane", "Description": "front backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "0JXR3K", "Part Type": "Backplane", "Description": "front backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "0XXHJ5", "Part Type": "PDB", "Description": "psu Riser board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PX2810403-78  B", "Part Type": "Adapter", "Description": "PCI-E 8Gb Fibre Channel Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010197Y00-000-G", "Part Type": "PCBA", "Description": "Front port assm. ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01040Y600-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "6PRX3", "Part Type": "PCBA", "Description": "intrusion detection board ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "MHW3T", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "0R0WJN", "Part Type": "PCBA", "Description": "Front information screen", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "8TXJ1", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "KPCB", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "68P32S8ABSHXS01X", "Part Type": "PCBA", "Description": "CDROM Drive Sata Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "KPCB", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "69PD2S8ABSHXQ01X", "Part Type": "PCBA", "Description": "CDROM Driver Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "KPCB", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "P328A6SHLXS01X", "Part Type": "PCBA", "Description": "CDROM Drive Sata Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "KPCB", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "68PD28A6SHLXM01X", "Part Type": "PCBA", "Description": "CDROM Driver Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8063601453406", "Part Type": "CPU", "Description": "intel xeon e7-4860v2", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "03R8F", "Part Type": "PCBA", "Description": "SD card reader", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8063601377422", "Part Type": "CPU", "Description": "Intel Xeon  E7-8891 v2 ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "1040T0400-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "CM8063601454907", "Part Type": "CPU", "Description": "Intel Xeon E7-8893V2", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R920", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "0XKF54", "Part Type": "Backplane", "Description": "Dimm riser board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "38Y69", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "02C2CP", "MPN (PWB)": "38Y6R", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0999FX", "MPN (PWB)": "6050A2587601 C02", "Part Type": "Riser", "Description": "2 Slot PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0NG4V5", "MPN (PWB)": "6050A2587401 B02", "Part Type": "Riser", "Description": "PCI Riser W/ intrusion dection switch", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "0CMVRK", "MPN (PWB)": "6050A2607101 B03", "Part Type": "PCBA", "Description": "Front Port assembly ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "0MG81C", "MPN (PWB)": "6050A2587301 F01", "Part Type": "Backplane", "Description": "front backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0R0DKT", "MPN (PWB)": "6050A2392401 F01", "Part Type": "PCBA", "Description": "Front VGA Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "6050A2588201 E01", "Part Type": "Backplane", "Description": "Mid Mount Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "6050A2588101 E01", "Part Type": "Backplane", "Description": "Front 10 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "02C2CP", "MPN (PWB)": "36Y6R", "Part Type": "Motherboard", "Description": "Motherboard ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PX2810403-83  B", "Part Type": "Adapter", "Description": "QLogic QLE2560 8Gb single-port PCIe ", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R630", "Manufacturer": "HLDS", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "EAX65332001", "Part Type": "PCBA", "Description": "CDROM Drive Sata Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0215H4", "MPN (PWB)": "20-20872-4", "Part Type": "PCBA", "Description": "Front Display LCD", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "HLDS", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "EAX65332101", "Part Type": "PCBA", "Description": "CDROM Connector Hub", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064401724101", "Part Type": "CPU", "Description": "Intel Xeon E5-2637V3    SPEC:SR202", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8066002041500", "Part Type": "CPU", "Description": "Intel Xeon E5-2643V4   SPEC:SR2P4", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": " CM8064401724301 ", "Part Type": "CPU", "Description": "Intel Xeon E5-2667V3   SPEC:SR203", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064401446117", "Part Type": "CPU", "Description": "Intel Xeon E5-2660V3   SPEC:SR1XR", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "07H4CN", "MPN (PWB)": "01040WD00-000-G", "Part Type": "RAID", "Description": "Dell Miniature 12gb/s SAS Eight Port RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "0Y3KJN", "MPN (PWB)": "AFBR-709DMZ-IN2", "Part Type": "AWS OPTICAL MODULE", "Description": "ATGBICS AFBR-709DMZ-IN2-C 10GBASE-SR/SW SFP+ 850nm 300m", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "FTLF8529P3BCV-QL", "Part Type": "AWS OPTICAL MODULE", "Description": "ATGBICS AFBR-709DMZ-IN2-C 10GBASE-SR/SW SFP+ 850nm 300m", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Finisar", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "FTLF8528P3BCV-QL", "Part Type": "AWS OPTICAL MODULE", "Description": "Finisar 8.5Gbps Multi-Mode Fiber 150m 850nm Duplex LC Connector SFP+ Transceiver Module for QLogic", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0C63DV", "MPN (PWB)": "KCC-REM-CPU-G63668", "Part Type": "NIC", "Description": "sfp network adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0FM487", "MPN (PWB)": "KCC-REM-BCM-95720AD2000G", "Part Type": "PCBA", "Description": "Network Daughter Card (rNDC)", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0942V6", "MPN (PWB)": "KCC-REM-CPU-G28429", "Part Type": "NIC", "Description": "10Gb Da/sfp+ server adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0P3T0T", "MPN (PWB)": "MSIP-REM-QLG-BK3210407", "Part Type": "NIC", "Description": "Network Interface Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "MSIP-REM-CPU-H71016", "Part Type": "NIC", "Description": "Intel Ethernet Converged Network Adapter XL710-QDA2.", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "6050A2605601 B03", "Part Type": "PCBA", "Description": "Front Port assembly ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "HP", "COO": "IN", "APN (DPN)": "", "MPN (PWB)": "HSTNM-B014", "Part Type": "RAID", "Description": "SAS Raid Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R630", "Manufacturer": "Samsung", "COO": "KR", "APN (DPN)": "", "MPN (PWB)": "MZPLK6T4HCJL-000D3", "Part Type": "SSD", "Description": "Samsung pci SSD  Model: MZ-PLK6T4A", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1220", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316777600006-A00", "Part Type": "Controller", "Description": "SAS CONTROLLER MODULE MD12 SERIES 6GB ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1220", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316777700003-A00", "Part Type": "PCBA", "Description": "Front I/O Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1220", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316777700001-A00", "Part Type": "Backplane", "Description": "24 Media Back Plane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1220", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C20600004-A00", "Part Type": "Backplane", "Description": "24 Media Back Plane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1220", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316777700002-A00", "Part Type": "Backplane", "Description": "Backplane Addition", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1220", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C20600003-A00", "Part Type": "PCBA", "Description": "Backplane Addition", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500071-A00", "Part Type": "Controller", "Description": "SAS CONTROLLER MODULE MD14 SERIES 6GB ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500072-A01", "Part Type": "Controller", "Description": "SAS CONTROLLER MODULE MD14 SERIES 6GB ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500057-A00", "Part Type": "PCBA", "Description": "Front I/O Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500058-A00", "Part Type": "Backplane", "Description": "Backplane Addition", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500059-A00", "Part Type": "Backplane", "Description": "Backplane Addition", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500060-A00", "Part Type": "Backplane", "Description": "24 Media Back Plane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "MD1420", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316C31500070-A00", "Part Type": "Backplane", "Description": "24 Media Back Plane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "9YY69", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "D001F", "Part Type": "Backplane", "Description": "6 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "N948K", "Part Type": "PCBA", "Description": "iDrac6 Controller Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "0K869T", "Part Type": "PCBA", "Description": "iDRAC6 Enterprise Remote Access Controller Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G044C", "Part Type": "PCBA", "Description": "iDrac6 Access Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Broadcom", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "BCM95709A0907G", "Part Type": "NIC", "Description": "DUAL-PORT ETHERNET PCIe x4 PCI NIC", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "JT168", "Part Type": "RAID", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "F431J", "Part Type": "RAID", "Description": "Perc H700 Integrated Sas Sata Raid Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "DM336", "Part Type": "Riser", "Description": "PCI Riser W/ intrusion dection switch", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "R559C", "Part Type": "Riser", "Description": "PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "20-20745-4", "Part Type": "PCBA", "Description": "Front information screen", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80614005127AA", "Part Type": "CPU", "Description": "Intel Xeon X5660   SPEC:SLBV6", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80614004320AD", "Part Type": "CPU", "Description": "Intel Xeon X5650   SPEC:SLBV3", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80602000768AA", "Part Type": "CPU", "Description": "Intel Xeon X5560   SPEC:SLBF4", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "TEAC", "COO": "JP", "APN (DPN)": "", "MPN (PWB)": "E3330HF", "Part Type": "PCBA", "Description": "CDROM SATA Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "C402D", "Part Type": "NIC", "Description": "TOE 4-Port Key iSCSI", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "DM322", "Part Type": "Backplane", "Description": "8 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Hynix", "COO": "KR", "APN (DPN)": "", "MPN (PWB)": "HMT31GR7BFR4A-H9 T7 AB 123", "Part Type": "Memory", "Description": "SK Hynix 8GB DDR3 ECC Registered (RDIMM)", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R710", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PX2810403-02  D", "Part Type": "Adapter", "Description": " QLogic QLE2560 8Gb/s single-port PCIe Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Qlogic", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "PX2510401-51  B", "Part Type": "Adapter", "Description": " QLogic QLE2560 8Gb/s single-port PCIe Host Bus Adapter", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Unknown", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "NHN647R26415F-D64NSE", "Part Type": "Memory", "Description": "NETLIST 512MB Memory Module Route to Recycle Processed", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R710", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "WX011", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "Xilinx", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "313784104", "Part Type": "PCBA", "Description": "Connector Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "IBM", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "FTLF8524P2BNL-IB", "Part Type": "AWS Optical Module", "Description": "SFP", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "IBM", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "JSHR42S305612", "Part Type": "AWS Optical Module", "Description": "SFP", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "IBM", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "11095P42120194V-0", "Part Type": "Motherboard", "Description": "Tape Drive Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "Mitsumi", "COO": "PH", "APN (DPN)": "", "MPN (PWB)": "72-9327A-00", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) Motor Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "243-651883-A", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) 7 Segment Display Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HEN(e)1/6", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HEN(e)2/6", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HEN(e)3/6", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HEN(e)4/6", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HEN(e)5/6", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HEN(e)6/6", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G7HPH[e]", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "30580961+4+1", "Manufacturer": "NEC", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "F-23R2417", "Part Type": "PCBA", "Description": "Tape Drive (11095P42120194V-0) PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "622215-003", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "010150K0A-613-G", "Part Type": "Riser", "Description": "3 Slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "010150D0C-756-G", "Part Type": "PCBA", "Description": "Front Panel Error Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "01014W20A-736-G", "Part Type": "PCBA", "Description": "Front Panel VGA Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "94V-020.14-52", "Part Type": "PCBA", "Description": "Front Panel I/O", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "94V-0M11", "Part Type": "PCBA", "Description": "Connector Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "01014RD0B-613-G", "Part Type": "PCBA", "Description": "Power Distribution Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "BCM95719A1913G", "Part Type": "NIC", "Description": "4 Port Ethernet Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "AMD", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "0S6328WKT8GHK", "Part Type": "CPU", "Description": "AMD Opteron 1508PGC", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01015560A-887-G", "Part Type": "Backplane", "Description": "8 Port Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "010154200-756-G", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01012NJ0A-575-G", "Part Type": "Riser", "Description": "3 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "462954-001", "Part Type": "Backplane", "Description": "Power Distribution Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2298401", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010118P0C-388-G", "Part Type": "Backplane", "Description": "8 slot backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "Front I/O board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "Samsung", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "064ANH", "Part Type": "PCBA", "Description": "DVD Spinner Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "Samsung", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "29LE2", "Part Type": "PCBA", "Description": "DVD Laser Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "Samsung", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "E131175", "Part Type": "PCBA", "Description": "DVD I/O Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385 G7", "Manufacturer": "AMD", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "OS6180YETCEG0", "Part Type": "CPU", "Description": "AMD Opteron 1108EPM", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "CSE-116", "Manufacturer": "SuperMicro", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "X10DRW-i", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "CSE-116", "Manufacturer": "SuperMicro", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "SAS116TQ", "Part Type": "Backplane", "Description": "10 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "CSE-116", "Manufacturer": "SuperMicro", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "RSC-R1UW-2E16", "Part Type": "Riser", "Description": "2 PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "CSE-116", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "CM8066002032701", "Part Type": "CPU", "Description": "Intel Xeon E5-2640V4", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "CSE-116", "Manufacturer": "Broadcom", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "03-25420-11A", "Part Type": "RAID", "Description": "Raid Controller", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "CSE-116", "Manufacturer": "LSI", "COO": "TH", "APN (DPN)": "", "MPN (PWB)": "L1-25376-01", "Part Type": "PCBA", "Description": "Super Capacitor Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "CSE-116", "Manufacturer": "SuperMicro", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "FP116", "Part Type": "PCBA", "Description": "Front I/O Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "8D1D9", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80614004320AD", "Part Type": "CPU", "Description": "Intel Xeon X5650   SPEC:SLBV3", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "RR809", "Part Type": "Riser", "Description": "1 Slot PCIe and Intrusion Detector", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "GT231", "Part Type": "Riser", "Description": "2 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "F431J", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "JT168", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "FD468", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "F132M", "Part Type": "Backplane", "Description": "6 Drive Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "20-20745-4", "Part Type": "PCBA", "Description": "Front Display", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "G044C", "Part Type": "PCBA", "Description": "iDrac6 Access Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "WX011", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "N948K", "Part Type": "PCBA", "Description": "PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R610", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "D688J", "Part Type": "PCBA", "Description": "SAS Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "TC031", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "DC876", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "C1324", "Part Type": "Controller", "Description": "CDROM controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "D1391", "Part Type": "Backplane", "Description": "2 Port Front Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "C1585", "Part Type": "PCBA", "Description": "Front Port Assembly ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "F1662", "Part Type": "PCBA", "Description": "Front Display Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "D2575", "Part Type": "PCBA", "Description": "Fan Power Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "BX80551KG2800HP", "Part Type": "CPU", "Description": "Intel Xeon 2800DP", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Adaptec", "COO": "SP", "APN (DPN)": "", "MPN (PWB)": "1817207-00", "Part Type": "Controller", "Description": "dual-channel, 64-bit PCI-to-Ultra160 SCSI controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "H1052", "Part Type": "Backplane", "Description": "10 Port Front Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2800", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "E-G021-04-5215 (B)", "Part Type": "NIC", "Description": "Intel PRO/1000 PT Dual Port Server Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "622259-003", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2470701 C01", "Part Type": "Backplane", "Description": "10 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "628105-001", "Part Type": "Riser", "Description": "1 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2403601 D04", "Part Type": "Riser", "Description": "1 slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8063501452503", "Part Type": "CPU", "Description": "Intel Xeon E5-2660V2 SPEC:SR1AB", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2368401 J01", "Part Type": "RAID", "Description": "Raid Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "KCC-REM-HPQ-HSTNS-B019", "Part Type": "NIC", "Description": "Network Card 2 ethernet ports", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "BCM95719A1913G", "Part Type": "NIC", "Description": "Network Card 4 ethernet ports", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2470601 C01", "Part Type": "PCBA", "Description": "Front I/O USB Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "A2441501", "Part Type": "PCBA", "Description": "Front LED Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PROLIANT DL360p Gen 8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2475601 C01", "Part Type": "PCBA", "Description": "Front Error Display", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "411768500001-X", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "HD279", "Part Type": "RAID", "Description": "SAS Raid Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316753700002-A00", "Part Type": "Riser", "Description": "1 Slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316753700005-A00", "Part Type": "PCBA", "Description": "Front I/O ports", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "316753700007-A00", "Part Type": "PCBA", "Description": "CD Drive Adapter Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "AMD", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "OS2350WAL4BGH", "Part Type": "CPU", "Description": "AMD Opteron OS2350WAL4BGH", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge SC 1435", "Manufacturer": "Western Digital", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "WD1600AAJS-75M0A0", "Part Type": "HDD", "Description": "160 GB HDD", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01013R700-000-G", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "HM031", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01013L000-000-G", "Part Type": "Riser", "Description": "1 Slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01013L100-000-G", "Part Type": "Riser", "Description": "1 Slot PCIe Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01012EW00-000-G", "Part Type": "Backplane", "Description": "4 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "BX80605X3440", "Part Type": "CPU", "Description": "Intel Xeon X3440 SPEC:SLBLF", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "N948K", "Part Type": "PCBA", "Description": "PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "G044C", "Part Type": "PCBA", "Description": "iDrac6 Access Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "20-20745-4", "Part Type": "PCBA", "Description": "Front Display", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R310", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01012FE00-000-G", "Part Type": "PCBA", "Description": "Front I/O Ports", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT6000XLT", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "SURT003", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PCBA", "Description": "", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "4T3JF", "Part Type": "Motherboard", "Description": "Dell Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169S00-000-G", "Part Type": "Backplane", "Description": "8 Media Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8062101082713", "Part Type": "CPU", "Description": "Intel Xeon E5-2670 SPEC:SR0KX", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169P00-000-G", "Part Type": "Riser", "Description": "2 PCIe Slot Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169Q00-000-G", "Part Type": "Riser", "Description": "2 PCIe Slot Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169W00-000-G", "Part Type": "Riser", "Description": "3 PCIe Slot Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01040LW00-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0C63DV", "MPN (PWB)": "KCC-REM-CPU-G63668", "Part Type": "NIC", "Description": "sfp network adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "G5K36", "Part Type": "PCBA", "Description": "Front SD/USB ports", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "XMTH2", "Part Type": "PCBA", "Description": "Front VGA Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R720", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0R0WJN", "MPN (PWB)": "20-20872-4", "Part Type": "PCBA", "Description": "Front Display LCD", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2235501 F01", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2235301 H01", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2234901 G02", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "Liteon", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "DD-3141-3C-LF", "Part Type": "PDB", "Description": "Power Distro Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2235401 G01", "Part Type": "Riser", "Description": "Ram Riser Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2234701 E01", "Part Type": "Backplane", "Description": "Front 8 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G7", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2298401 C02", "Part Type": "SSD", "Description": "Raid board NAND Flash card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A0066401 F01", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "012057-001", "Part Type": "Backplane", "Description": "6 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "AMD", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "OST280FAA6CB", "Part Type": "CPU", "Description": "AMD Opteron OST280FAA6CB", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A0066601 B01 L1", "Part Type": "Riser", "Description": "3 Slot Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "Liteon", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "DD-1091-4C2", "Part Type": "PCBA", "Description": "PCBA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "Compaq", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "010965-001", "Part Type": "PCBA", "Description": "Front LED Inidicators", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL385", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "011732-001", "Part Type": "PCBA", "Description": "Backplane Terminator Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "D2DDF", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "GVPV7", "Part Type": "PDB", "Description": "Power Distro Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "03R8F", "Part Type": "PCBA", "Description": "Front SD Card Reader", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0R0WJN", "MPN (PWB)": "20-20872-4", "Part Type": "PCBA", "Description": "Front Screen Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6PRX3", "Part Type": "PCBA", "Description": "intrusion detection board ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "MHW3T", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "GGYP2", "Part Type": "Riser", "Description": "Rear Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "47NVC", "Part Type": "Riser", "Description": "Rear Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6M1TG", "Part Type": "Backplane", "Description": "front backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010197Y00-000-G", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R930", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "M46KN", "Part Type": "Riser", "Description": "Ram Riser Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "PTWDY", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0VV3F2", "MPN (PWB)": "4T3JF", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2388401 H02", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2392501 E01", "Part Type": "Riser", "Description": "PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "6050A2392501 E02", "Part Type": "Riser", "Description": "PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0PWX19", "MPN (PWB)": "6050A2651301 A01", "Part Type": "Riser", "Description": "PCI Riser W/ intrusion dection switch", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2392001 E02", "Part Type": "Riser", "Description": "PCI Riser W/ intrusion dection switch", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0XRDPC", "MPN (PWB)": "6050A2392401 F01", "Part Type": "PCBA", "Description": "Front VGA Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2392401 E02", "Part Type": "PCBA", "Description": "Front VGA Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01016A400-000-G", "Part Type": "PCBA", "Description": "Rear Dual SD Card board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0TMGR6", "MPN (PWB)": "BCM95719A1904G", "Part Type": "PCBA", "Description": "Network Daughter Card (rNDC)", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0R0WJN", "MPN (PWB)": "20-20872-4", "Part Type": "PCBA", "Description": "Front LCD Display", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0TY8F9", "MPN (PWB)": "01040LW00-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0K09CJ", "MPN (PWB)": "010166D00-000-G", "Part Type": "RAID", "Description": "RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0FM487", "MPN (PWB)": "KCC-REM-BCM-95720AD2000G", "Part Type": "PCBA", "Description": "Network Daughter Card (rNDC)", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "05VR2M", "MPN (PWB)": "PX2810703-00-B", "Part Type": "Adapter", "Description": "Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Kingston", "COO": "TW", "APN (DPN)": "", "MPN (PWB)": "0738M1", "Part Type": "SSD", "Description": "2GB SD Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Broadcom", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "KCC-REM-BCM-95719A1904G", "Part Type": "NIC", "Description": "4-port Gigabit Ethernet network interface card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2384501 E01", "Part Type": "BackPlane", "Description": "Front 4 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0KVGG1", "MPN (PWB)": "6050A2384301 G01", "Part Type": "BackPlane", "Description": "Front 8 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R620", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0XM1C9", "MPN (PWB)": "6050A2384701 H01", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2445301 E03", "Part Type": "Motherboard", "Description": "Upper Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2445201 E03", "Part Type": "Motherboard", "Description": "Lower Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169V00-000-G", "Part Type": "Backplane", "Description": "Front 16 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2445401 D02", "Part Type": "Riser", "Description": "2 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2445501 E01", "Part Type": "Riser", "Description": "3 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6050A2445601 D02", "Part Type": "Riser", "Description": "2 Port Pci Riser w/ Intrusion switch", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Broadcom", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "KCC-REM-BCM-95720A2003G", "Part Type": "NIC", "Description": "dual-port 1-Gigabit Ethernet copper network interface card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "03R8F", "Part Type": "PCBA", "Description": "SD card reader", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "XMTH2", "Part Type": "PCBA", "Description": "Front VGA Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "010169T00-000-G", "Part Type": "Backplane", "Description": "Backplane sub assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Dell PowerEdge R820", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "01040LJ00-000-G", "Part Type": "RAID", "Description": "PCI Raid Controller ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "MX", "APN (DPN)": "0V3GRK", "MPN (PWB)": "6050A3111201 K01", "Part Type": "Motherboard", "Description": "Main Board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0571RM", "MPN (PWB)": "6050A3081901 E01", "Part Type": "Backplane", "Description": "24 port media backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DF7XH", "MPN (PWB)": "PG5XM", "Part Type": "Riser", "Description": "2 PCI X16 slots", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "05W43G", "MPN (PWB)": "PMJTH", "Part Type": "Riser", "Description": "2 PCI X8 slots", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "0RKO4H", "MPN (PWB)": "WMM4X", "Part Type": "Riser", "Description": "2 PCI X8 slots", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "02XTTT", "MPN (PWB)": "CC05T", "Part Type": "Riser", "Description": "2 PCI X8 slots", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "03KDWX", "MPN (PWB)": "01042D500-000-G", "Part Type": "RAID", "Description": "Front Raid Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "TW", "APN (DPN)": "0R6Y03", "MPN (PWB)": "1VJY1", "Part Type": "PCBA", "Description": "Front I/O Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "D7F85", "Part Type": "PCBA", "Description": "Front I/O Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "069P4G", "MPN (PWB)": "20-21132-4", "Part Type": "PCBA", "Description": "Front Display", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "MX", "APN (DPN)": "034MF2", "MPN (PWB)": "2XR06", "Part Type": "NIC", "Description": "2 Port Ethernet Network Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "MY", "APN (DPN)": "0YJYK1", "MPN (PWB)": "K20659-003", "Part Type": "NIC", "Description": "2 Port SFP Network Card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "MX", "APN (DPN)": "00WRHK", "MPN (PWB)": "75H56", "Part Type": "PCBA", "Description": "Rear I/O Port", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "027TGR", "MPN (PWB)": "27TGR", "Part Type": "Backplane", "Description": "Backplane Expandsion", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Qlogic", "COO": "MY", "APN (DPN)": "0YNFDG", "MPN (PWB)": "MSIP-REM-0LG-BK3210407", "Part Type": "Adapter", "Description": "Single Port Fiber Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R750", "Manufacturer": "Marvell", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "FTLF8529P5BCV-QM", "Part Type": "AWS Optical Module", "Description": "16G SFP", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DG2JC", "MPN (PWB)": "CH9RR", "Part Type": "Motherboard", "Description": "Upper Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "4C69J", "Part Type": "Motherboard", "Description": "Lower Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN ", "APN (DPN)": "", "MPN (PWB)": "TXKK8", "Part Type": "Backplane", "Description": "Front 24 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "6M7HD", "Part Type": "Backplane", "Description": "Backplane sub assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "J57TW", "Part Type": "Riser", "Description": "Right Rear PCI Riser ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "3RGW7", "Part Type": "Riser", "Description": "Left Rear PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0H3HDT", "MPN (PWB)": "6050A2811701 C01", "Part Type": "PCBA", "Description": "Power Button and Light Assembly ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "XFCCP", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "20-20982-4", "Part Type": "PCBA", "Description": "Front Screen Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "070RV1", "MPN (PWB)": "01014M400-000-G", "Part Type": "RAID", "Description": "Dell PERC H840 External RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "06VDPG", "MPN (PWB)": "msip-rem-cpu-h20678", "Part Type": "RAID", "Description": "Intel Ethernet Daughter Card", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "01YGFW", "MPN (PWB)": "0101EM000-000-G", "Part Type": "Adapter", "Description": "PCIe Gen3 Extender/Adapter card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "0P8PCK", "MPN (PWB)": "BK3210407-26  C", "Part Type": "Adapter", "Description": "16Gb single-port PCIe 3.0 Fibre Channel Host Bus Adapte", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "092CG2", "MPN (PWB)": "NNRGO", "Part Type": "PCBA", "Description": "Motherboard Power Via board", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R940", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "03JH35", "MPN (PWB)": "01041M500-000-G", "Part Type": "RAID", "Description": "12G SAS PCIe RAID Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "00WQD1", "MPN (PWB)": "8D4C4", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0J7W3K", "MPN (PWB)": "N4KNT", "Part Type": "Riser", "Description": "3 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DTTHJ", "MPN (PWB)": "D7TF6", "Part Type": "Riser", "Description": "2 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0GHGTP", "MPN (PWB)": "D3R48", "Part Type": "Riser", "Description": "3 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0PM4YD", "MPN (PWB)": "1NH8H", "Part Type": "Riser", "Description": "3 Port PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0K2Y8N", "MPN (PWB)": "K2Y8N", "Part Type": "Backplane", "Description": "Front 24 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "058D2W", "MPN (PWB)": "58D2W", "Part Type": "Backplane", "Description": "Backplane sub assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0H3HDT", "MPN (PWB)": "6050A2811701 C01", "Part Type": "PCBA", "Description": "Power Button and Light Assembly ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "084X8D", "MPN (PWB)": "C8KXH", "Part Type": "PCBA", "Description": "Front buttons w/ wifi module ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "070RV1", "MPN (PWB)": "01041M400-000-G", "Part Type": "RAID", "Description": "Dell PERC H840 External RAID Controller", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Qlogic", "COO": "MY", "APN (DPN)": "0P8PCK", "MPN (PWB)": "BK3210407-26  B", "Part Type": "Adapter", "Description": "16Gb Single Port PCIe 3.0 Fibre Channel Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0WJPD6", "MPN (PWB)": "25TGR", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0XYD50", "MPN (PWB)": "AFBR-709DMZ-IN3", "Part Type": "AWS Optical Module", "Description": "dual-rate (1G/10G) SFP+ optical transceiver", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0MT5CP", "MPN (PWB)": "T5G5P", "Part Type": "PCBA", "Description": "Front Port Assembly", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "0XYD50", "MPN (PWB)": "FTLX857D3BCV-IT", "Part Type": "AWS Optical Module", "Description": "10Gb SFP module", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "AFBR-57F5MZ-QL", "Part Type": "AWS Optical Module", "Description": "16Gb SFP module ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Finisar", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "FTLF8528P2BCV-QT", "Part Type": "AWS Optical Module", "Description": "16Gb SFP module ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R740xd", "Manufacturer": "Qlogic", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "FLTF8529P4BCV-QL", "Part Type": "AWS Optical Module", "Description": "16Gb SFP module ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0599V5", "MPN (PWB)": "38Y6R", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "04KKCY", "MPN (PWB)": "0101A0E00-000-G", "Part Type": "Riser", "Description": "3 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0392WG", "MPN (PWB)": "0101A0D00-000-G", "Part Type": "Riser", "Description": "2 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0778N6", "MPN (PWB)": "0101A1F00-000-G", "Part Type": "Riser", "Description": "2 Port PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DMC25", "MPN (PWB)": "0101A1D00-000-G", "Part Type": "Backplane", "Description": "Front 8 Port Backplane", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DT9H6", "MPN (PWB)": "01019YW00-000-G", "Part Type": "Riser", "Description": "2 Port PCI Riser", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "07K5HK", "MPN (PWB)": "0101A1B00-000-G", "Part Type": "Backplane", "Description": "Front 8 Port Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0KMCCD", "MPN (PWB)": "01040WD00-000-G", "Part Type": "RAID", "Description": "Rear Raid Controller", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0R0WJN", "MPN (PWB)": "20-20872-4", "Part Type": "PCBA", "Description": "Front LCD Display", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "DELL", "COO": "CN", "APN (DPN)": "00W39F", "MPN (PWB)": "JMN2W", "Part Type": "PCBA", "Description": "Server Card Reader USB", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "DELL", "COO": "CN", "APN (DPN)": "0V0P45", "MPN (PWB)": "JXVKT", "Part Type": "PCBA", "Description": "Front Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "FTLC8571D3BCV-IT", "Part Type": "AWS Optical Module", "Description": "", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "", "APN (DPN)": "0TGNMY", "MPN (PWB)": "0101A0M00-000-G", "Part Type": "Backplane", "Description": "", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0HVHVM", "MPN (PWB)": "43FX3", "Part Type": "PCB", "Description": "rear SD card reader ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R730", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "01X0MG", "MPN (PWB)": "CXV62", "Part Type": "PCBA", "Description": "Front Power Buttons", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge R240", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0DRR0P", "MPN (PWB)": "16MN1", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R240", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0TDM6T", "MPN (PWB)": "6050A2804301", "Part Type": "Backplane", "Description": "4 Media Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R240", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0CG2YM", "MPN (PWB)": "0101GU500-000-G", "Part Type": "RAID", "Description": "Dell PERC H330 PCIe 12Gb/s SAS/SATA RAID Controller", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R240", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0414NX", "MPN (PWB)": "CY7T5", "Part Type": "PCBA", "Description": "Front I/O port", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge R240", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0593D8", "MPN (PWB)": "14585-1", "Part Type": "Riser", "Description": "2 Slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0CU542", "MPN (PWB)": "H6162", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0PN610", "MPN (PWB)": "H6180", "Part Type": "Backplane", "Description": "6 Media Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0N7192", "MPN (PWB)": "N7193", "Part Type": "Riser", "Description": "Riser with intrustion detection", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0MH180", "MPN (PWB)": "H9059", "Part Type": "Riser", "Description": "1 slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0H6183", "MPN (PWB)": "H6184", "Part Type": "Riser", "Description": "2 Slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "FC555", "Part Type": "Adapter", "Description": "CD Drive Adapter Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "WD-C0501M-6BLAc", "Part Type": "PCBA", "Description": "Front LED Display", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0FG027 ", "MPN (PWB)": "FG027 ", "Part Type": "Adapter", "Description": "TOE 2 (TCP/IP Offload Engine 2) adapter key", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0JH878", "MPN (PWB)": "U7816", "Part Type": "PCBA", "Description": "Front I/O ports", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "03DDJT", "MPN (PWB)": "D688J", "Part Type": "PCBA", "Description": "PERC H200e 6Gb/s Dual-Port External PCIe SAS/SATA Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Unknown", "COO": "CN", "APN (DPN)": "QCG21029", "MPN (PWB)": "CEPNS970SCN ", "Part Type": "PCBA", "Description": "4 6Gb SAS Passthrough PCI Card", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Areca", "COO": "TW", "APN (DPN)": "N/A", "MPN (PWB)": "ARC1280ML", "Part Type": "RAID", "Description": "24-port SATA II PCIe x8 RAID controller", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0WW126", "MPN (PWB)": "WW127", "Part Type": "Controller", "Description": "Dell Remote Access Controller 5 (DRAC 5) expansion card", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "PowerEdge 2950", "Manufacturer": "Dell", "COO": "CN", "APN (DPN)": "0WX072", "MPN (PWB)": "U7511", "Part Type": "RAID", "Description": "Dell PERC 5/i SAS/SATA RAID Controller Card", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "FXNESSN-001P", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "N/A", "MPN (PWB)": "01015550A-756-G", "Part Type": "Backplane", "Description": "8 Media Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "N/A", "MPN (PWB)": "01014RD0A-391-G", "Part Type": "PDB", "Description": "Power Distribution Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "N/A", "MPN (PWB)": "010150K0A-391-G", "Part Type": "Riser", "Description": "3 Slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "TW", "APN (DPN)": "N/A", "MPN (PWB)": "01014W20A-756-G", "Part Type": "PCBA", "Description": "Front VGA Port", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "Qlogic", "COO": "CN", "APN (DPN)": "PX2810403-02  H", "MPN (PWB)": "PX2810703-00-B", "Part Type": "Adapter", "Description": "Host Bus Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "010150D0C-887-G", "Part Type": "PCBA", "Description": "Front Status Display", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "4K1295", "MPN (PWB)": "6050A2298401 C02", "Part Type": "SSD", "Description": "Raid board NAND Flash card", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "4K1365", "MPN (PWB)": "6060A2368401 J01", "Part Type": "Memory", "Description": "HP Flash-Backed Write Cache - Route this MPN to Recycle Processed", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "Qlogic", "COO": "MY", "APN (DPN)": "PX2510401-51  B", "MPN (PWB)": "PX2510701-00-B", "Part Type": "Adapter", "Description": "Host Bus Adapter", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "4K1365", "MPN (PWB)": "6050A2374501 H01", "Part Type": "RAID", "Description": "Raid Controller PCI Card", "Added to eViridis": "No", "Scannable MPN": "Yes"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "AFBR-703SDZ-IN2", "Part Type": "AWS Optical Module", "Description": "850 nm laser SFP 8G", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "Avago", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "AFBR-57D7AMZ-QL", "Part Type": "AWS Optical Module", "Description": "850 nm laser SFP 8G", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "CPU-E69818 (B)", "Part Type": "NIC", "Description": "sfp network adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "BCM95719A1913G", "Part Type": "NIC", "Description": "4 Port Ethernet Adapter", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL380p Gen8", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "4K1295", "MPN (PWB)": "HSTNM-B020", "Part Type": "RAID", "Description": "24-port (8 internal / 16 external), PCI-Express Serial Attached SCSI (SAS) RAID controlleR", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "06103-1", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "012996-001", "Part Type": "Motherboard", "Description": "Motherboard subassembly", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "IN", "APN (DPN)": "N/A", "MPN (PWB)": "012443-001", "Part Type": "Backplane", "Description": "6 Media Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "06319-1", "Part Type": "Riser", "Description": "1 slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "06320-1", "Part Type": "Riser", "Description": "1 slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "013011 B", "Part Type": "PCBA", "Description": "Power Button and Light Assembly ", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "US", "APN (DPN)": "N/A", "MPN (PWB)": "012497-001", "Part Type": "PCBA", "Description": "Front Panel Connector Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "SG", "APN (DPN)": "N/A", "MPN (PWB)": "013161-001", "Part Type": "RAID", "Description": "Smart Array SAS RAID controller", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "SG", "APN (DPN)": "N/A", "MPN (PWB)": "013125-001", "Part Type": "Memory", "Description": "Write Cache - Route this MPN to Recycle Processed", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL320s", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "4K0755", "MPN (PWB)": "6050A2125701 A01", "Part Type": "PCBA", "Description": "CD Rom Adapter Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "HP", "COO": "US", "APN (DPN)": "N/A", "MPN (PWB)": "011988-001", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "011661-001", "Part Type": "Backplane", "Description": "6 Media Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "011664-001", "Part Type": "Riser", "Description": "3 Slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "Compaq", "COO": "TH", "APN (DPN)": "N/A", "MPN (PWB)": "266284-001", "Part Type": "PCBA", "Description": "Voltage Regulator Module", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "Compaq", "COO": "MY", "APN (DPN)": "N/A", "MPN (PWB)": "011667-001", "Part Type": "Memory", "Description": "Compaq 64MB memory module - Disposition this MPN to Recycle Processed", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "Compaq", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "010983-001", "Part Type": "PCBA", "Description": "PCI Occupancy Detector Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "Compaq", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "010965-001", "Part Type": "PCBA", "Description": "Front LED Inidicators", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "Compaq", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "010986-001", "Part Type": "PCBA", "Description": "Disk Drive Adapter Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "A95786-001", "MPN (PWB)": "C29870 001", "Part Type": "NIC", "Description": "Intel PRO/1000 MT Dual Port Server Adapter", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL380", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "309629-001", "Part Type": "PDB", "Description": "power converter module", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "IN", "APN (DPN)": "N/A", "MPN (PWB)": "013064-001", "Part Type": "Motherboard", "Description": "Motherboard", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "IN", "APN (DPN)": "N/A", "MPN (PWB)": "013070-001", "Part Type": "Motherboard", "Description": "Motherboard subassembly", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "IN", "APN (DPN)": "N/A", "MPN (PWB)": "013061-001", "Part Type": "Riser", "Description": "9 Slot PCI Riser", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "013153-001", "Part Type": "Backplane", "Description": "8 Slot Backplane", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "Liteon", "COO": "CN", "APN (DPN)": "451885-001", "MPN (PWB)": "DD-3141-1C-LF", "Part Type": "PDB", "Description": "Power Distribution Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "TH", "APN (DPN)": "N/A", "MPN (PWB)": "449428-001", "Part Type": "PCBA", "Description": "Voltage Regulator Module", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "SG", "APN (DPN)": "N/A", "MPN (PWB)": "013125-001", "Part Type": "Memory", "Description": "Write Cache - Route this MPN to Recycle Processed", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "SG", "APN (DPN)": "N/A", "MPN (PWB)": "012700-001", "Part Type": "Memory", "Description": "Write Cache - Route this MPN to Recycle Processed", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "013217-001", "Part Type": "PCBA", "Description": "CD -ROM Paddle Board", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "013073-001", "Part Type": "PCBA", "Description": "LED Status Panel", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "455056-001", "Part Type": "PCBA", "Description": "Air Temperature Sensor", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "CN", "APN (DPN)": "N/A", "MPN (PWB)": "013109-001", "Part Type": "PCBA", "Description": "Front I/O Port", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "SG", "APN (DPN)": "N/A", "MPN (PWB)": "013161-001", "Part Type": "RAID", "Description": "Smart Array SAS RAID controller", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "ProLiant DL580 G5", "Manufacturer": "HP", "COO": "SG", "APN (DPN)": "N/A", "MPN (PWB)": "012610-001", "Part Type": "RAID", "Description": "Smart Array RAID controller", "Added to eViridis": "No", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "Motherboard", "Description": "", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "Motherboard", "Description": "", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Isilon", "COO": "CN", "APN (DPN)": "415-0049-02 A", "MPN (PWB)": "110-0034-02", "Part Type": "Backplane", "Description": "12 Port Media Backplane", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "PDB", "Description": "", "Added to eViridis": "", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "CISCO", "COO": "", "APN (DPN)": "", "MPN (PWB)": "73-11148-04", "Part Type": "PCBA", "Description": "Small Form-Factor Pluggable", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "UNKNOWN", "COO": "", "APN (DPN)": "", "MPN (PWB)": "73-11147-08", "Part Type": "MOTHERBOARD", "Description": "MOTHERBOARD", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "UNKNOWN", "COO": "", "APN (DPN)": "", "MPN (PWB)": "73-11834-11", "Part Type": "MOTHERBOARD", "Description": "Integrated motherboard for the Cisco 2901 Integrated Services Router", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "UNKNOWN", "COO": "", "APN (DPN)": "", "MPN (PWB)": "73-11149-03", "Part Type": "PCBA", "Description": "Daughterboard used in legacy Cisco Catalyst switches", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "", "APN (DPN)": "", "MPN (PWB)": "220058-804-N ", "Part Type": "SWITCH", "Description": "12300 36 PORT TRUE SCALE FABRIC EDGE SWITCH", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "DELL", "COO": "", "APN (DPN)": "", "MPN (PWB)": "OPTIPLEX 755", "Part Type": "COMPUTER", "Description": "OptiPlex 755 ", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "UNKNOWN", "COO": "", "APN (DPN)": "", "MPN (PWB)": "73-9989-05", "Part Type": "PCBA", "Description": "Daughterboard used in legacy Cisco Catalyst switches", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "UNKNOWN", "COO": "", "APN (DPN)": "", "MPN (PWB)": "73-10319-11", "Part Type": "MOTHERBOARD", "Description": "MOTHERBOARD", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "DELL", "COO": "", "APN (DPN)": "", "MPN (PWB)": "E01M", "Part Type": "CONTROLLER", "Description": "SAS CONTROLLER MODULE MD12 SERIES 6GB", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "Finisar", "COO": "", "APN (DPN)": "", "MPN (PWB)": "FTLF8528P3BCV-QL", "Part Type": "AWS OPTICAL MODULE", "Description": "Finisar 8.5Gbps Multi-Mode Fiber 150m 850nm Duplex LC Connector SFP+ Transceiver Module for QLogic", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "DELL", "COO": "", "APN (DPN)": "", "MPN (PWB)": "00VCK1-70821-34A", "Part Type": "BACKPLANE", "Description": "Backplane", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "DELL", "COO": "", "APN (DPN)": "", "MPN (PWB)": "CA07069-B20400DE", "Part Type": "HDD", "Description": "146GB storage capacity, ultra-fast 15,000 RPM rotational speed, and a 2.5-inch SAS-6Gb/s interface", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "Seagate", "COO": "", "APN (DPN)": "", "MPN (PWB)": "ST9300453SS", "Part Type": "HDD", "Description": "300GB SED SAS Hard Drive", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "DELL", "COO": "", "APN (DPN)": "", "MPN (PWB)": "0B24379", "Part Type": "HDD", "Description": "Model-HUC151414CSS600 146GB", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8062100856401", "Part Type": "CPU", "Description": "Intel Xeon E5-2640", "Added to eViridis": "Yes", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "Mitsumi", "COO": "", "APN (DPN)": "", "MPN (PWB)": "", "Part Type": "", "Description": "", "Added to eViridis": "", "Scannable MPN": ""}, {"Server": "Isilon NL400", "Manufacturer": "Juniper", "COO": "", "APN (DPN)": "", "MPN (PWB)": "SRX550-645AP", "Part Type": "Security Appliance", "Description": "SRX550-645AP-M. SRX550M Firewall with 4 GB DRAM and 8 GB CF, 2 U height,. 6 GPIM slots, 2 Mini-PIM slots, 6 10/100/1000BASE-T ports, 4. GbE SFP ports,", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Juniper", "COO": "", "APN (DPN)": "", "MPN (PWB)": "SSG-320M-SH", "Part Type": "Security Appliance", "Description": "SSG-320M-SH SECURE SERV GATEWAY 320 SYSTEM HIGH MEM 1GB 3 PIM AC.", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Infoblox", "COO": "", "APN (DPN)": "", "MPN (PWB)": "IB-1102-A-MRI", "Part Type": "Network Accessory", "Description": "4 Port Type RJ-45 Port Speed Gigabit Ethernet (10/100/1000) Power Over Ethernet (PoE) No Rackmountable No Dimensions (WxDxH) 17.3\" x 21.5\" x 1.5\"", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Dell", "COO": "TH", "APN (DPN)": "", "MPN (PWB)": "WD1600JS-75NCB2", "Part Type": "HDD", "Description": "160 GB 3.5-inch desktop hard drive Western Digital Caviar SE 160GB Internal 7200RPM 3.5\"", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Seagate", "COO": "cn", "APN (DPN)": "", "MPN (PWB)": "ST3808110AS", "Part Type": "HDD", "Description": "Form Factor 3.5\" Capacity 80 GB. Speed 7200 RPM Rotation Time 8.33 ms. Rate 300 MB/seconds Buffer Size 8192 KB Width 101.6 mm", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "220058-804-N", "Part Type": "Switch", "Description": "Intel 12300, a 36-port, managed, 40Gbps QDR InfiniBand switch", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Samsung", "COO": "cn", "APN (DPN)": "", "MPN (PWB)": "A5993-E11A-A09LK", "Part Type": "HDD", "Description": "320 GB HDD", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "", "APN (DPN)": "", "MPN (PWB)": "CD8069504194202", "Part Type": "CPU", "Description": "intel xeon gold 6244 SPEC:SRF8Z", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR ", "APN (DPN)": "", "MPN (PWB)": "AT80614006954AA", "Part Type": "CPU", "Description": "Intel Xeon E5603 SPEC:SLC2F", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80604004869AA", "Part Type": "CPU", "Description": "Intel Xeon X7560 SPEC:SLBRD", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "HH80557PG0331M", "Part Type": "CPU", "Description": "Intel Pentium E2160 SPEC:SLA8Z", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8066002645900", "Part Type": "CPU", "Description": "Intel Xeon E5-2697AV4 SPEC:SR2K1", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80615006750AB", "Part Type": "CPU", "Description": "Intel Xeon E7-8837 SPEC:SLC3N", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064501552202", "Part Type": "CPU", "Description": "Intel Xeon E7-8891V3 SPEC:SR225", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8066002042802", "Part Type": "CPU", "Description": "Intel Xeon E5-2687WV4 SPEC:SR2NA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064401613502", "Part Type": "CPU", "Description": "Intel Xeon E5-2687WV3 SPEC:SR1Y6", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8066902027903", "Part Type": "CPU", "Description": "Intel Xeon E7-8891V4 SPEC:SR2SQ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8063701160603", "Part Type": "CPU", "Description": "Intel Xeon E3-1225V2 SPEC:SR0PJ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80614003597AC", "Part Type": "CPU", "Description": "Intel Xeon E5645 SPEC:SLBWZ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064502025001", "Part Type": "CPU", "Description": "Intel Xeon E7-8867V3 SPEC:SR228", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "HH80557PH0564M", "Part Type": "CPU", "Description": "Intel Xeon 3060 SPEC:SL9ZH", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "AMD", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "0ST280FAA6CB", "Part Type": "CPU", "Description": "AMD Opteron 280", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Viking", "COO": "", "APN (DPN)": "", "MPN (PWB)": "VR4DU647228ETKQ4 ", "Part Type": "Memory", "Description": "DDR4 SODIMM PC2700 COMPLIANT", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "LF80565QH0566M", "Part Type": "CPU", "Description": "Intel Xeon E7330 SPEC:SLA77", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Samsung", "COO": "KR", "APN (DPN)": "", "MPN (PWB)": "KR M391T5663AZ3-CE6 0731", "Part Type": "Memory", "Description": "Ddr2 667Mhz Pc2-5300", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "HH80563JH0368M", "Part Type": "CPU", "Description": "Intel Xeon L5320 SLAC9", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Crucial", "COO": "SG", "APN (DPN)": "", "MPN (PWB)": "MT8VDDT6464AY-40BF4", "Part Type": "Memory", "Description": "MT8VDDT6464AY-40BF4 DDR-400 UDIMM PC3200", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Crucial", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "MT18KSF1G72AZ-1G6P1 739", "Part Type": "Memory", "Description": "8GB DDR3-1600 (PC3-12800) ECC", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Nanya", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "NT1GT64U88D0BY-3C", "Part Type": "Memory", "Description": "1GB PC2-5300 DDR2-667MHz", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "BX80532KE3066D", "Part Type": "CPU", "Description": "Intel Xeon 3066DP SPEC:SL6VP ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Kingston", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "KP223C-ELD", "Part Type": "Memory", "Description": "GB Speed Rating: PC3-10600 Performance: DDR3-1333", "Added to eViridis": "Yes", "Scannable MPN": "Yes"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8064601464707", "Part Type": "CPU", "Description": "Intel I5-4570 SPEC:SR14E", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "HH80553PG0804M", "Part Type": "CPU", "Description": "Intel Pentium 930 SPEC:SL95X", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "VN", "APN (DPN)": "", "MPN (PWB)": "CM8064601482522", "Part Type": "CPU", "Description": "Intel Pentium G3420 SPEC:SR1NB", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "HH80553PG0804MN", "Part Type": "CPU", "Description": "Intel Pentium 925 SPEC:SL9KA", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "AT80580PJ0676M", "Part Type": "CPU", "Description": "Intel Core2 Quad Q9400 SPEC:SLB6B", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8068404174707", "Part Type": "CPU", "Description": "Intel Xeon E-2224 SPEC:SRFAV", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8066201920404", "Part Type": "CPU", "Description": "Intel I5-6500 SPEC:SR2L6", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "HH80557PJ0534MG", "Part Type": "CPU", "Description": "Intel Core 2 Duo E6550 ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "AT80571PH0773ML", "Part Type": "CPU", "Description": "Intel Core 2 Duo E7500 SPEC:SLGTE ", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "AT80569PJ073N", "Part Type": "CPU", "Description": "Intel Core 2 Quad SPEC:SLB8V", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8064401832000", "Part Type": "CPU", "Description": "Intel Xeon E5-2623V3 SPEC:SR208", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "CR", "APN (DPN)": "", "MPN (PWB)": "CM8062101145700", "Part Type": "CPU", "Description": "Intel Xeon E5-4617 SPEC:SR0L5", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Unigen", "COO": "US", "APN (DPN)": "", "MPN (PWB)": "UG64T7200L8DU-AL6", "Part Type": "Memory", "Description": "512MB DDR2 667 ECC UDIMM 240Pin", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Unigen", "COO": "US", "APN (DPN)": "", "MPN (PWB)": "740-034375-MX", "Part Type": "Memory", "Description": "2GB DDR3 ECC UDIMM 1333Mhz", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "SK Hynix", "COO": "KR", "APN (DPN)": "", "MPN (PWB)": "HMA851U6AFR6N-UH N0 AC 640", "Part Type": "Memory", "Description": "4GB 1Rx16 PC4-2400-UC0-11", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Samsung", "COO": "KR", "APN (DPN)": "", "MPN (PWB)": "KR M378B5673FH0-CH9 1041", "Part Type": "Memory", "Description": "2GB 2Rx8 PC3-10600U-09-10-B0", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "ELPIDA", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "EBE10UE8ACFA-6E-E", "Part Type": "Memory", "Description": "SRX550-645AP-M. SRX550M Firewall with 4 GB DRAM and 8 GB CF, 2 U height,. 6 GPIM slots, 2 Mini-PIM slots, 6 10/100/1000BASE-T ports, 4. GbE SFP ports,", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "ELPIDA", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "EBE10UE8ACWA-8G-E", "Part Type": "Memory", "Description": "SRX550-645AP-M. SRX550M Firewall with 4 GB DRAM and 8 GB CF, 2 U height,. 6 GPIM slots, 2 Mini-PIM slots, 6 10/100/1000BASE-T ports, 4. GbE SFP ports,", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "ATP", "COO": "CN", "APN (DPN)": "", "MPN (PWB)": "AJ28K72H8BHE6S", "Part Type": "Memory", "Description": "1GB  DDR2-667 ECC", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Smart Modular", "COO": "PR", "APN (DPN)": "", "MPN (PWB)": "SM572284FD8E6CHICH", "Part Type": "Memory", "Description": "1GB ECC PC-2100 266Mhz", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Micron", "COO": "SG", "APN (DPN)": "", "MPN (PWB)": "MT18HTF25672AZ-80EH1 205", "Part Type": "Memory", "Description": "2GB 2Rx8 PC2-6400E-555-13-G0", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Micron", "COO": "SG", "APN (DPN)": "", "MPN (PWB)": "MT8VDDT6464AY-40BF4 150", "Part Type": "Memory", "Description": "512MB DDR PC3200U UDIMM", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Intel", "COO": "MY", "APN (DPN)": "", "MPN (PWB)": "CM8066002041100", "Part Type": "CPU", "Description": "Intel Xeon E5-2637V4 SPEC:SR2P3", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Kioxia ", "COO": "", "APN (DPN)": "", "MPN (PWB)": "KXG60ZNV256G", "Part Type": "SSD", "Description": "256GB NVMe M.2 2280 internal solid-state drive (SSD)", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "HGST", "COO": "", "APN (DPN)": "", "MPN (PWB)": "0F19451", "Part Type": "HDD", "Description": "2TB HDD", "Added to eViridis": "Yes", "Scannable MPN": "No"}, {"Server": "Isilon NL400", "Manufacturer": "Western Digital", "COO": "", "APN (DPN)": "", "MPN (PWB)": "0N963M", "Part Type": "HDD", "Description": "160 GB HDD", "Added to eViridis": "Yes", "Scannable MPN": "No"}]/*DATA_END*/;
+  const PILOT_NAME = /*PILOT_START*/"ReluTech Pilot"/*PILOT_END*/;
+  const MFG_CONFIG = /*MFG_START*/["Adaptec", "AMD", "Areca", "ATP", "Avago", "Broadcom", "CISCO", "Compaq", "Crucial", "Dell", "ELPIDA", "Finisar", "HGST", "HLDS", "HP", "Hynix", "IBM", "Infoblox", "Intel", "Isilon", "Juniper", "Kingston", "Kioxia", "KPCB", "Liteon", "LSI", "Marvell", "Micron", "Mitsumi", "Nanya", "NEC", "Qlogic", "Samsung", "Seagate", "SK Hynix", "Smart Modular", "SuperMicro", "TEAC", "Unigen", "Unknown", "Viking", "Western Digital", "Xilinx"]/*MFG_END*/;
+
+  const COLUMNS = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+
+  // Map between the tool's display-row shape and Amplify's Part records.
+  function toDisplayRow(item) {
+    return {
+      _id: item.id,
+      _manual: !!item.isManual,
+      "Server": item.server || '',
+      "Manufacturer": item.manufacturer || '',
+      "COO": item.coo || '',
+      "APN (DPN)": item.apn || '',
+      "MPN (PWB)": item.mpn || '',
+      "Part Type": item.partType || '',
+      "Description": item.description || '',
+      "Added to eViridis": item.addedToEviridis || '',
+      "Scannable MPN": item.scannableMpn || '',
+    };
+  }
+  function toCreateInput(row) {
+    return {
+      server: row["Server"] || 'Uncategorized',
+      manufacturer: row["Manufacturer"] || '',
+      coo: row["COO"] || '',
+      apn: row["APN (DPN)"] || '',
+      mpn: row["MPN (PWB)"],
+      partType: row["Part Type"] || '',
+      description: row["Description"] || '',
+      addedToEviridis: row["Added to eViridis"] || '',
+      scannableMpn: row["Scannable MPN"] || '',
+      isManual: row._manual !== undefined ? row._manual : true,
+    };
+  }
+
+  // Runs `worker` over `items` with a concurrency cap, so bulk operations
+  // (first-time seeding, "start new pilot" wipes) don't fire hundreds of
+  // requests all at once.
+  async function runWithConcurrency(items, worker, concurrency = 10) {
+    let idx = 0;
+    const runners = new Array(Math.min(concurrency, items.length || 1)).fill(0).map(async () => {
+      while (idx < items.length) {
+        const i = idx++;
+        await worker(items[i], i);
+      }
+    });
+    await Promise.all(runners);
+  }
+
+  let allRows = [];
+  let activeServer = null;
+  let viewMode = 'host'; // 'host' | 'notInEv'
+  let sortState = { col: null, dir: 1 };
+  let selectedIds = new Set();
+  let manufacturerIdByName = new Map();
+  let pilotConfigId = null;
+
+  const serverListEl = document.getElementById('serverList');
+  const contentEl = document.getElementById('content');
+  const searchEl = document.getElementById('search');
+  const partTypeFilterEl = document.getElementById('partTypeFilter');
+  const scannableFilterEl = document.getElementById('scannableFilter');
+  const statLineEl = document.getElementById('statLine');
+  const fileInput = document.getElementById('fileInput');
+  const addMpnBtn = document.getElementById('addMpnBtn');
+  const adminMenuBtn = document.getElementById('adminMenuBtn');
+  const adminDropdown = document.getElementById('adminDropdown');
+  const modalOverlay = document.getElementById('modalOverlay');
+  const addMpnForm = document.getElementById('addMpnForm');
+  const cancelAddBtn = document.getElementById('cancelAddBtn');
+  const exportJsonBtn = document.getElementById('exportJsonBtn');
+  const exportXlsxBtn = document.getElementById('exportXlsxBtn');
+  const exportNotInEvBtn = document.getElementById('exportNotInEvBtn');
+  const exportNewEntriesBtn = document.getElementById('exportNewEntriesBtn');
+  const reloadDefaultBtn = document.getElementById('reloadDefaultBtn');
+  const newPilotBtn = document.getElementById('newPilotBtn');
+  const manageMfgBtn = document.getElementById('manageMfgBtn');
+  const mfgModalOverlay = document.getElementById('mfgModalOverlay');
+  const closeMfgModalBtn = document.getElementById('closeMfgModalBtn');
+  const addMfgBtn = document.getElementById('addMfgBtn');
+  const newMfgInput = document.getElementById('f_new_mfg');
+  const mfgListEl = document.getElementById('mfgList');
+  let manufacturersConfig = MFG_CONFIG.slice();
+  const pilotNameDisplay = document.getElementById('pilotNameDisplay');
+  let pilotName = PILOT_NAME;
+
+  function renderPilotName() {
+    pilotNameDisplay.textContent = pilotName || '';
+  }
+  renderPilotName();
+
+  function normalize(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+
+  function getServerGroups(rows) {
+    const map = new Map();
+    rows.forEach(r => {
+      const s = normalize(r["Server"]) || "Uncategorized";
+      if (!map.has(s)) map.set(s, []);
+      map.get(s).push(r);
+    });
+    return map;
+  }
+
+  function renderSidebar() {
+    const groups = getServerGroups(allRows);
+    let names = Array.from(groups.keys()).sort((a,b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+    });
+
+    const q = searchEl.value.trim().toLowerCase();
+    const ptFilter = partTypeFilterEl.value;
+    const scanFilter = scannableFilterEl.value;
+
+    let matchCounts = null;
+    if (q) {
+      matchCounts = new Map();
+      allRows.forEach(r => {
+        if (ptFilter && normalize(r["Part Type"]) !== ptFilter) return;
+        if (scanFilter && normalize(r["Scannable MPN"]).toLowerCase() !== scanFilter.toLowerCase()) return;
+        const hay = COLUMNS.map(c => normalize(r[c]).toLowerCase()).join(' | ');
+        if (!hay.includes(q)) return;
+        const s = normalize(r["Server"]) || "Uncategorized";
+        matchCounts.set(s, (matchCounts.get(s) || 0) + 1);
+      });
+      names = names.filter(n => matchCounts.has(n));
+    }
+
+    serverListEl.innerHTML = '';
+    names.forEach(name => {
+      const div = document.createElement('div');
+      div.className = 'server-item' + (viewMode === 'host' && name === activeServer && !q ? ' active' : '');
+      const count = matchCounts ? matchCounts.get(name) : groups.get(name).length;
+      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="count">${count}</span>`;
+      div.onclick = () => { viewMode = 'host'; activeServer = name; selectedIds.clear(); searchEl.value = ''; renderSidebar(); renderContent(); };
+      serverListEl.appendChild(div);
+    });
+
+    if (q) {
+      const totalMatches = Array.from(matchCounts.values()).reduce((a,b) => a+b, 0);
+      statLineEl.textContent = `${totalMatches} matching part${totalMatches===1?'':'s'} across ${names.length} host model${names.length===1?'':'s'}`;
+    } else {
+      statLineEl.textContent = `${allRows.length} parts across ${names.length} host models`;
+    }
+
+    const notInEvCount = allRows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes').length;
+    document.getElementById('notInEvCount').textContent = notInEvCount;
+    document.getElementById('notInEvNavItem').classList.toggle('active', viewMode === 'notInEv' && !q);
+
+    // populate part type filter once
+    const types = Array.from(new Set(allRows.map(r => normalize(r["Part Type"])).filter(Boolean))).sort();
+    const currentVal = partTypeFilterEl.value;
+    partTypeFilterEl.innerHTML = '<option value="">All part types</option>' +
+      types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    partTypeFilterEl.value = types.includes(currentVal) ? currentVal : '';
+  }
+
+  document.getElementById('notInEvNavItem').addEventListener('click', () => {
+    viewMode = 'notInEv';
+    selectedIds.clear();
+    searchEl.value = '';
+    renderSidebar();
+    renderContent();
+  });
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function badge(val) {
+    const v = normalize(val);
+    if (v.toLowerCase() === 'yes') return `<span class="badge yes">Yes</span>`;
+    if (v.toLowerCase() === 'no') return `<span class="badge no">No</span>`;
+    if (!v) return `<span class="badge blank">&mdash;</span>`;
+    return escapeHtml(v);
+  }
+
+  function renderCopyableCell(val) {
+    if (!val) return `<td class="mono">—</td>`;
+    return `<td class="mono mpn-copy" data-mpn="${escapeHtml(val)}" title="Click to copy">${escapeHtml(val)}</td>`;
+  }
+
+  function renderEvCell(row) {
+    const isYes = normalize(row["Added to eViridis"]).toLowerCase() === 'yes';
+    return `<td><label class="ev-check-wrap"><input type="checkbox" class="ev-checkbox" data-id="${escapeHtml(row._id)}" ${isYes ? 'checked' : ''}><span>${isYes ? 'Yes' : 'No'}</span></label></td>`;
+  }
+
+  function copyMpnCell(cell) {
+    const text = cell.getAttribute('data-mpn');
+    if (!text) return;
+    const showCopied = () => {
+      const original = cell.textContent;
+      cell.classList.add('copied');
+      cell.textContent = 'Copied!';
+      setTimeout(() => {
+        cell.textContent = original;
+        cell.classList.remove('copied');
+      }, 900);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showCopied).catch(() => {
+        alert('Could not copy automatically — here is the MPN:\n' + text);
+      });
+    } else {
+      // Fallback for browsers without Clipboard API access
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showCopied(); }
+      catch (e) { alert('Could not copy automatically — here is the MPN:\n' + text); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  contentEl.addEventListener('click', (e) => {
+    const cell = e.target.closest('.mpn-copy');
+    if (cell) copyMpnCell(cell);
+  });
+
+  contentEl.addEventListener('change', async (e) => {
+    const cb = e.target.closest('.ev-checkbox');
+    if (!cb) return;
+    const id = cb.getAttribute('data-id');
+    const newValue = cb.checked ? 'Yes' : 'No';
+    const label = cb.nextElementSibling;
+    if (label) label.textContent = newValue;
+    cb.disabled = true;
+    try {
+      await client.models.Part.update({ id, addedToEviridis: newValue });
+    } catch (err) {
+      cb.checked = !cb.checked;
+      if (label) label.textContent = cb.checked ? 'Yes' : 'No';
+      alert('Could not update this row: ' + err.message);
+    } finally {
+      cb.disabled = false;
+    }
+  });
+
+  function renderContent() {
+    if (searchEl.value.trim()) {
+      renderSearchResultsView(searchEl.value.trim());
+      return;
+    }
+    if (viewMode === 'notInEv') {
+      renderNotInEvView();
+      return;
+    }
+    if (!activeServer) {
+      contentEl.innerHTML = '<div class="empty-state">Select a server model on the left to view its parts.</div>';
+      return;
+    }
+    renderHostView();
+  }
+
+  function renderHostView() {
+    const groups = getServerGroups(allRows);
+    let rows = groups.get(activeServer) || [];
+
+    const q = searchEl.value.trim().toLowerCase();
+    const ptFilter = partTypeFilterEl.value;
+    const scanFilter = scannableFilterEl.value;
+
+    rows = rows.filter(r => {
+      if (ptFilter && normalize(r["Part Type"]) !== ptFilter) return false;
+      if (scanFilter && normalize(r["Scannable MPN"]).toLowerCase() !== scanFilter.toLowerCase()) return false;
+      if (q) {
+        const hay = COLUMNS.map(c => normalize(r[c]).toLowerCase()).join(' | ');
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    if (sortState.col) {
+      rows = rows.slice().sort((a,b) => {
+        const va = normalize(a[sortState.col]).toLowerCase();
+        const vb = normalize(b[sortState.col]).toLowerCase();
+        if (va < vb) return -1 * sortState.dir;
+        if (va > vb) return 1 * sortState.dir;
+        return 0;
+      });
+    }
+
+    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+
+    // prune selections that no longer exist
+    const visibleIds = new Set(rows.map(r => r._id));
+    Array.from(selectedIds).forEach(id => { if (!visibleIds.has(id)) selectedIds.delete(id); });
+
+    let html = `<div class="content-header">
+        <h2>${escapeHtml(activeServer)}</h2>
+        <span class="count-pill">${rows.length} part${rows.length===1?'':'s'}</span>
+      </div>`;
+
+    html += `<div class="bulk-bar${selectedIds.size ? ' show' : ''}" id="bulkBar">
+        <span class="count"><span id="bulkCount">${selectedIds.size}</span> selected</span>
+        <button id="bulkMarkYesBtn" type="button">Mark as Yes (in eViridis)</button>
+        <button class="clear-sel" id="bulkClearBtn" type="button">Clear selection</button>
+      </div>`;
+
+    if (rows.length === 0) {
+      html += `<div class="empty-state">No parts match the current filters.</div>`;
+    } else {
+      html += `<table><thead><tr>`;
+      html += `<th class="checkbox-col"><input type="checkbox" id="selectAllCheckbox"></th>`;
+      displayCols.forEach(col => {
+        let arrow = '';
+        if (sortState.col === col) arrow = sortState.dir === 1 ? '▲' : '▼';
+        html += `<th data-col="${escapeHtml(col)}">${escapeHtml(col)}<span class="arrow">${arrow}</span></th>`;
+      });
+      html += `<th>&nbsp;</th>`;
+      html += `</tr></thead><tbody>`;
+      rows.forEach(r => {
+        const notInEv = normalize(r["Added to eViridis"]).toLowerCase() !== 'yes';
+        html += `<tr data-id="${escapeHtml(r._id)}" class="${notInEv ? 'row-not-ev' : ''}">`;
+        html += `<td class="checkbox-col"><input type="checkbox" class="row-checkbox" data-id="${escapeHtml(r._id)}" ${selectedIds.has(r._id) ? 'checked' : ''}></td>`;
+        displayCols.forEach((col, ci) => {
+          if (col === 'Added to eViridis') {
+            html += renderEvCell(r);
+          } else if (col === 'Scannable MPN') {
+            html += `<td>${badge(r[col])}</td>`;
+          } else if (col === 'APN (DPN)') {
+            html += `<td class="mono">${escapeHtml(normalize(r[col]) || '—')}</td>`;
+          } else if (col === 'MPN (PWB)') {
+            html += renderCopyableCell(normalize(r[col]));
+          } else if (ci === displayCols.length - 1) {
+            html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
+          } else {
+            html += `<td>${escapeHtml(normalize(r[col]) || '—')}</td>`;
+          }
+        });
+        html += `<td class="row-actions">${r._manual ? '<button class="delete-row-btn" title="Remove this manually added row">Delete</button>' : ''}</td>`;
+        html += '</tr>';
+      });
+      html += `</tbody></table>`;
+    }
+
+    contentEl.innerHTML = html;
+
+    contentEl.querySelectorAll('thead th[data-col]').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.getAttribute('data-col');
+        if (sortState.col === col) sortState.dir *= -1;
+        else { sortState.col = col; sortState.dir = 1; }
+        renderContent();
+      });
+    });
+
+    contentEl.querySelectorAll('.delete-row-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const tr = e.target.closest('tr');
+        const id = tr.getAttribute('data-id');
+        if (confirm('Remove this manually added MPN entry?')) {
+          selectedIds.delete(id);
+          try {
+            await client.models.Part.delete({ id });
+          } catch (err) {
+            alert('Could not delete this entry: ' + err.message);
+          }
+        }
+      });
+    });
+
+    const selectAllCb = document.getElementById('selectAllCheckbox');
+    if (selectAllCb) {
+      selectAllCb.checked = rows.length > 0 && rows.every(r => selectedIds.has(r._id));
+      selectAllCb.addEventListener('change', () => {
+        if (selectAllCb.checked) rows.forEach(r => selectedIds.add(r._id));
+        else rows.forEach(r => selectedIds.delete(r._id));
+        renderContent();
+      });
+    }
+
+    contentEl.querySelectorAll('.row-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-id');
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        renderContent();
+      });
+    });
+
+    const bulkMarkYesBtn = document.getElementById('bulkMarkYesBtn');
+    if (bulkMarkYesBtn) {
+      bulkMarkYesBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedIds);
+        selectedIds.clear();
+        renderContent();
+        try {
+          await runWithConcurrency(ids, (id) => client.models.Part.update({ id, addedToEviridis: 'Yes' }), 15);
+        } catch (err) {
+          alert('Could not mark all selected rows as Yes: ' + err.message);
+        }
+      });
+    }
+    const bulkClearBtn = document.getElementById('bulkClearBtn');
+    if (bulkClearBtn) {
+      bulkClearBtn.addEventListener('click', () => {
+        selectedIds.clear();
+        renderContent();
+      });
+    }
+  }
+
+  // ---- Not-in-eViridis view: all not-yet-added parts, grouped by host ----
+  function renderNotInEvView() {
+    const q = searchEl.value.trim().toLowerCase();
+    const ptFilter = partTypeFilterEl.value;
+    const scanFilter = scannableFilterEl.value;
+
+    let rows = allRows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes');
+
+    rows = rows.filter(r => {
+      if (ptFilter && normalize(r["Part Type"]) !== ptFilter) return false;
+      if (scanFilter && normalize(r["Scannable MPN"]).toLowerCase() !== scanFilter.toLowerCase()) return false;
+      if (q) {
+        const hay = COLUMNS.map(c => normalize(r[c]).toLowerCase()).join(' | ');
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const visibleIds = new Set(rows.map(r => r._id));
+    Array.from(selectedIds).forEach(id => { if (!visibleIds.has(id)) selectedIds.delete(id); });
+
+    const groups = new Map();
+    rows.forEach(r => {
+      const s = normalize(r["Server"]) || "Uncategorized";
+      if (!groups.has(s)) groups.set(s, []);
+      groups.get(s).push(r);
+    });
+    const names = Array.from(groups.keys()).sort((a,b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+    });
+
+    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Scannable MPN","Added to eViridis"];
+
+    let html = `<div class="content-header">
+        <h2>Parts Not in eViridis</h2>
+        <span class="count-pill">${rows.length} part${rows.length===1?'':'s'} across ${names.length} host model${names.length===1?'':'s'}</span>
+      </div>`;
+
+    html += `<div class="bulk-bar${selectedIds.size ? ' show' : ''}" id="bulkBar">
+        <span class="count"><span id="bulkCount">${selectedIds.size}</span> selected</span>
+        <button id="bulkMarkYesBtn" type="button">Mark as Yes (in eViridis)</button>
+        <button class="clear-sel" id="bulkClearBtn" type="button">Clear selection</button>
+      </div>`;
+
+    if (rows.length === 0) {
+      html += `<div class="empty-state">Nothing outstanding — every part is marked as Yes for Added to eViridis.</div>`;
+    } else {
+      names.forEach(name => {
+        const groupRows = groups.get(name);
+        html += `<div class="host-group">
+            <div class="host-group-header">
+              <span>${escapeHtml(name)}</span>
+              <span class="count-pill">${groupRows.length} part${groupRows.length===1?'':'s'}</span>
+            </div>
+            <table><thead><tr>`;
+        html += `<th class="checkbox-col"><input type="checkbox" class="group-select-all" data-group="${escapeHtml(name)}"></th>`;
+        displayCols.forEach(col => { html += `<th>${escapeHtml(col)}</th>`; });
+        html += `</tr></thead><tbody>`;
+        groupRows.forEach(r => {
+          html += `<tr data-id="${escapeHtml(r._id)}">`;
+          html += `<td class="checkbox-col"><input type="checkbox" class="row-checkbox" data-id="${escapeHtml(r._id)}" ${selectedIds.has(r._id) ? 'checked' : ''}></td>`;
+          displayCols.forEach(col => {
+            if (col === 'Added to eViridis') {
+              html += renderEvCell(r);
+            } else if (col === 'Scannable MPN') {
+              html += `<td>${badge(r[col])}</td>`;
+            } else if (col === 'APN (DPN)') {
+              html += `<td class="mono">${escapeHtml(normalize(r[col]) || '—')}</td>`;
+            } else if (col === 'MPN (PWB)') {
+              html += renderCopyableCell(normalize(r[col]));
+            } else {
+              html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
+            }
+          });
+          html += '</tr>';
+        });
+        html += `</tbody></table></div>`;
+      });
+    }
+
+    contentEl.innerHTML = html;
+
+    contentEl.querySelectorAll('.row-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-id');
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        renderContent();
+      });
+    });
+
+    contentEl.querySelectorAll('.group-select-all').forEach(cb => {
+      const groupName = cb.getAttribute('data-group');
+      const groupRows = groups.get(groupName) || [];
+      cb.checked = groupRows.length > 0 && groupRows.every(r => selectedIds.has(r._id));
+      cb.addEventListener('change', () => {
+        if (cb.checked) groupRows.forEach(r => selectedIds.add(r._id));
+        else groupRows.forEach(r => selectedIds.delete(r._id));
+        renderContent();
+      });
+    });
+
+    const bulkMarkYesBtn = document.getElementById('bulkMarkYesBtn');
+    if (bulkMarkYesBtn) {
+      bulkMarkYesBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedIds);
+        selectedIds.clear();
+        renderContent();
+        try {
+          await runWithConcurrency(ids, (id) => client.models.Part.update({ id, addedToEviridis: 'Yes' }), 15);
+        } catch (err) {
+          alert('Could not mark all selected rows as Yes: ' + err.message);
+        }
+      });
+    }
+    const bulkClearBtn = document.getElementById('bulkClearBtn');
+    if (bulkClearBtn) {
+      bulkClearBtn.addEventListener('click', () => {
+        selectedIds.clear();
+        renderContent();
+      });
+    }
+  }
+
+  // ---- Global search results: searches every server, not just the selected one ----
+  function renderSearchResultsView(q) {
+    const qLower = q.toLowerCase();
+    const ptFilter = partTypeFilterEl.value;
+    const scanFilter = scannableFilterEl.value;
+
+    let rows = allRows.filter(r => {
+      if (ptFilter && normalize(r["Part Type"]) !== ptFilter) return false;
+      if (scanFilter && normalize(r["Scannable MPN"]).toLowerCase() !== scanFilter.toLowerCase()) return false;
+      const hay = COLUMNS.map(c => normalize(r[c]).toLowerCase()).join(' | ');
+      return hay.includes(qLower);
+    });
+
+    const visibleIds = new Set(rows.map(r => r._id));
+    Array.from(selectedIds).forEach(id => { if (!visibleIds.has(id)) selectedIds.delete(id); });
+
+    const groups = new Map();
+    rows.forEach(r => {
+      const s = normalize(r["Server"]) || "Uncategorized";
+      if (!groups.has(s)) groups.set(s, []);
+      groups.get(s).push(r);
+    });
+    const names = Array.from(groups.keys()).sort((a,b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+    });
+
+    const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+
+    let html = `<div class="content-header">
+        <h2>Search results for "${escapeHtml(q)}"</h2>
+        <span class="count-pill">${rows.length} part${rows.length===1?'':'s'} across ${names.length} host model${names.length===1?'':'s'}</span>
+      </div>`;
+
+    html += `<div class="bulk-bar${selectedIds.size ? ' show' : ''}" id="bulkBar">
+        <span class="count"><span id="bulkCount">${selectedIds.size}</span> selected</span>
+        <button id="bulkMarkYesBtn" type="button">Mark as Yes (in eViridis)</button>
+        <button class="clear-sel" id="bulkClearBtn" type="button">Clear selection</button>
+      </div>`;
+
+    if (rows.length === 0) {
+      html += `<div class="empty-state">No parts match "${escapeHtml(q)}" across any host model.</div>`;
+    } else {
+      names.forEach(name => {
+        const groupRows = groups.get(name);
+        html += `<div class="host-group">
+            <div class="host-group-header">
+              <span>${escapeHtml(name)}</span>
+              <span class="count-pill">${groupRows.length} part${groupRows.length===1?'':'s'}</span>
+            </div>
+            <table><thead><tr>`;
+        html += `<th class="checkbox-col"><input type="checkbox" class="group-select-all" data-group="${escapeHtml(name)}"></th>`;
+        displayCols.forEach(col => { html += `<th>${escapeHtml(col)}</th>`; });
+        html += `</tr></thead><tbody>`;
+        groupRows.forEach(r => {
+          const notInEv = normalize(r["Added to eViridis"]).toLowerCase() !== 'yes';
+          html += `<tr data-id="${escapeHtml(r._id)}" class="${notInEv ? 'row-not-ev' : ''}">`;
+          html += `<td class="checkbox-col"><input type="checkbox" class="row-checkbox" data-id="${escapeHtml(r._id)}" ${selectedIds.has(r._id) ? 'checked' : ''}></td>`;
+          displayCols.forEach(col => {
+            if (col === 'Added to eViridis') {
+              html += renderEvCell(r);
+            } else if (col === 'Scannable MPN') {
+              html += `<td>${badge(r[col])}</td>`;
+            } else if (col === 'APN (DPN)') {
+              html += `<td class="mono">${escapeHtml(normalize(r[col]) || '—')}</td>`;
+            } else if (col === 'MPN (PWB)') {
+              html += renderCopyableCell(normalize(r[col]));
+            } else {
+              html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
+            }
+          });
+          html += '</tr>';
+        });
+        html += `</tbody></table></div>`;
+      });
+    }
+
+    contentEl.innerHTML = html;
+
+    contentEl.querySelectorAll('.row-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-id');
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        renderContent();
+      });
+    });
+
+    contentEl.querySelectorAll('.group-select-all').forEach(cb => {
+      const groupName = cb.getAttribute('data-group');
+      const groupRows = groups.get(groupName) || [];
+      cb.checked = groupRows.length > 0 && groupRows.every(r => selectedIds.has(r._id));
+      cb.addEventListener('change', () => {
+        if (cb.checked) groupRows.forEach(r => selectedIds.add(r._id));
+        else groupRows.forEach(r => selectedIds.delete(r._id));
+        renderContent();
+      });
+    });
+
+    const bulkMarkYesBtn = document.getElementById('bulkMarkYesBtn');
+    if (bulkMarkYesBtn) {
+      bulkMarkYesBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedIds);
+        selectedIds.clear();
+        renderContent();
+        try {
+          await runWithConcurrency(ids, (id) => client.models.Part.update({ id, addedToEviridis: 'Yes' }), 15);
+        } catch (err) {
+          alert('Could not mark all selected rows as Yes: ' + err.message);
+        }
+      });
+    }
+    const bulkClearBtn2 = document.getElementById('bulkClearBtn');
+    if (bulkClearBtn2) {
+      bulkClearBtn2.addEventListener('click', () => {
+        selectedIds.clear();
+        renderContent();
+      });
+    }
+  }
+
+  function openModal() {
+    const servers = Array.from(new Set(allRows.map(r => normalize(r["Server"])).filter(Boolean))).sort();
+    const mfgsInUse = allRows.map(r => normalize(r["Manufacturer"])).filter(Boolean);
+    const mfgs = Array.from(new Set([...manufacturersConfig, ...mfgsInUse])).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
+    const partTypes = Array.from(new Set(allRows.map(r => normalize(r["Part Type"])).filter(Boolean))).sort();
+    document.getElementById('serverOptions').innerHTML = servers.map(s => `<option value="${escapeHtml(s)}">`).join('');
+    document.getElementById('mfgOptions').innerHTML = mfgs.map(s => `<option value="${escapeHtml(s)}">`).join('');
+    document.getElementById('partTypeOptions').innerHTML = partTypes.map(s => `<option value="${escapeHtml(s)}">`).join('');
+    if (activeServer) document.getElementById('f_server').value = activeServer;
+    modalOverlay.classList.add('open');
+    document.getElementById('f_server').focus();
+  }
+  function closeModal() {
+    modalOverlay.classList.remove('open');
+    addMpnForm.reset();
+  }
+  addMpnBtn.addEventListener('click', openModal);
+
+  // ---- Admin dropdown menu ----
+  adminMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    adminDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (adminDropdown.classList.contains('open') && !adminDropdown.contains(e.target) && e.target !== adminMenuBtn) {
+      adminDropdown.classList.remove('open');
+    }
+  });
+  // Close the menu after any action inside it (file inputs stay open for their own dialog)
+  adminDropdown.querySelectorAll('.admin-item').forEach(el => {
+    el.addEventListener('click', () => {
+      adminDropdown.classList.remove('open');
+    });
+  });
+  cancelAddBtn.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+  // ---- Manufacturers config modal ----
+  function renderMfgList() {
+    const mfgsInUse = new Set(allRows.map(r => normalize(r["Manufacturer"]).toLowerCase()).filter(Boolean));
+    const sorted = manufacturersConfig.slice().sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
+    if (sorted.length === 0) {
+      mfgListEl.innerHTML = '<div class="mfg-empty">No manufacturers configured yet — add one above.</div>';
+      return;
+    }
+    mfgListEl.innerHTML = sorted.map(m => {
+      const inUse = mfgsInUse.has(m.toLowerCase());
+      return `<div class="mfg-row" data-mfg="${escapeHtml(m)}">
+          <span class="mfg-name-wrap"><span>${escapeHtml(m)}</span>${inUse ? '<span class="in-use-tag">in use</span>' : ''}</span>
+          <button class="remove-mfg-btn" type="button">Remove</button>
+        </div>`;
+    }).join('');
+    mfgListEl.querySelectorAll('.remove-mfg-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const row = e.target.closest('.mfg-row');
+        const name = row.getAttribute('data-mfg');
+        const id = manufacturerIdByName.get(name.toLowerCase());
+        if (!id) return;
+        try {
+          await client.models.Manufacturer.delete({ id });
+        } catch (err) {
+          alert('Could not remove this manufacturer: ' + err.message);
+        }
+      });
+    });
+  }
+
+  manageMfgBtn.addEventListener('click', () => {
+    renderMfgList();
+    mfgModalOverlay.classList.add('open');
+    newMfgInput.value = '';
+    newMfgInput.focus();
+  });
+
+  function closeMfgModal() {
+    mfgModalOverlay.classList.remove('open');
+  }
+  closeMfgModalBtn.addEventListener('click', closeMfgModal);
+  mfgModalOverlay.addEventListener('click', (e) => { if (e.target === mfgModalOverlay) closeMfgModal(); });
+
+  async function addManufacturer() {
+    const name = newMfgInput.value.trim();
+    if (!name) return;
+    if (manufacturersConfig.some(m => m.toLowerCase() === name.toLowerCase())) {
+      newMfgInput.value = '';
+      return;
+    }
+    newMfgInput.value = '';
+    try {
+      await client.models.Manufacturer.create({ name });
+    } catch (err) {
+      alert('Could not add this manufacturer: ' + err.message);
+    }
+    newMfgInput.focus();
+  }
+  addMfgBtn.addEventListener('click', addManufacturer);
+  newMfgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addManufacturer(); }
+  });
+
+  addMpnForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const server = document.getElementById('f_server').value.trim() || 'Uncategorized';
+    const mpn = document.getElementById('f_mpn').value.trim();
+    if (!mpn) return;
+
+    const mpnNorm = mpn.toLowerCase();
+    const serverNorm = server.toLowerCase();
+    const dupSameHost = allRows.find(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() === serverNorm);
+    const dupOtherHosts = allRows.filter(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() !== serverNorm);
+
+    if (dupSameHost) {
+      const desc = normalize(dupSameHost['Description']) || '(no description)';
+      const proceed = confirm(`This MPN "${mpn}" already exists under "${server}":\n${desc}\n\nAdd it again anyway?`);
+      if (!proceed) return;
+    } else if (dupOtherHosts.length > 0) {
+      const hosts = Array.from(new Set(dupOtherHosts.map(r => normalize(r['Server'])))).join(', ');
+      const proceed = confirm(`This MPN "${mpn}" already exists under other host model(s): ${hosts}.\n\nAdd it for "${server}" as well?`);
+      if (!proceed) return;
+    }
+
+    const rec = {
+      "Server": server,
+      "Manufacturer": document.getElementById('f_mfg').value.trim(),
+      "COO": document.getElementById('f_coo').value.trim(),
+      "APN (DPN)": document.getElementById('f_apn').value.trim(),
+      "MPN (PWB)": mpn,
+      "Part Type": document.getElementById('f_parttype').value.trim(),
+      "Description": document.getElementById('f_desc').value.trim(),
+      "Added to eViridis": document.getElementById('f_added').value,
+      "Scannable MPN": document.getElementById('f_scan').value,
+      "_manual": true
+    };
+
+    activeServer = server;
+    viewMode = 'host';
+    sortState = { col: null, dir: 1 };
+    closeModal();
+    renderSidebar();
+    renderContent();
+
+    try {
+      await client.models.Part.create(toCreateInput(rec));
+      if (rec['Manufacturer'] && !manufacturersConfig.some(m => m.toLowerCase() === rec['Manufacturer'].toLowerCase())) {
+        await client.models.Manufacturer.create({ name: rec['Manufacturer'] });
+      }
+    } catch (err) {
+      alert('Could not save this MPN — it may not have been added for everyone: ' + err.message);
+    }
+  });
+
+  // ---- Export / Import data as JSON (for end-of-day handoff) ----
+  function downloadFile(filename, content, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function todayStamp() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  exportJsonBtn.addEventListener('click', () => {
+    const exportRows = allRows.map(r => {
+      const rec = Object.assign({}, r);
+      delete rec._id;
+      return rec;
+    });
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      rowCount: exportRows.length,
+      rows: exportRows,
+      manufacturers: manufacturersConfig
+    };
+    downloadFile(`mpn_host_mapping_${todayStamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  });
+
+  exportXlsxBtn.addEventListener('click', () => {
+    const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+    const aoa = [cols];
+    allRows.forEach(r => {
+      aoa.push(cols.map(c => normalize(r[c])));
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MPN By Host Mapping');
+    XLSX.writeFile(wb, `mpn_host_mapping_${todayStamp()}.xlsx`);
+  });
+
+  exportNotInEvBtn.addEventListener('click', () => {
+    const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+    const notInEv = allRows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes');
+    if (notInEv.length === 0) {
+      alert('Everything is already marked as Yes for Added to eViridis — nothing to export.');
+      return;
+    }
+    const sorted = notInEv.slice().sort((a,b) => {
+      const sa = normalize(a["Server"]).toLowerCase();
+      const sb = normalize(b["Server"]).toLowerCase();
+      if (sa !== sb) return sa < sb ? -1 : 1;
+      return normalize(a["Part Type"]).toLowerCase().localeCompare(normalize(b["Part Type"]).toLowerCase());
+    });
+    const aoa = [cols];
+    sorted.forEach(r => aoa.push(cols.map(c => normalize(r[c]))));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Not in eViridis');
+    XLSX.writeFile(wb, `not_in_eviridis_${todayStamp()}.xlsx`);
+  });
+
+  // ---- Export new entries into the ORIGINAL workbook, preserving its formatting ----
+  // Only appends rows that don't already exist in the source file (tracked via the
+  // `_manual` flag) to the bottom of the same sheet. Every existing cell, every other
+  // sheet, every merge and style is left completely untouched.
+  exportNewEntriesBtn.addEventListener('click', () => {
+    const newRows = allRows.filter(r => r._manual);
+    if (newRows.length === 0) {
+      alert('There are no new entries to export yet — add some MPNs first.');
+      return;
+    }
+
+    const cols = ["Server","Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN"];
+
+    // Group by host/server, sorted alphabetically (Uncategorized last), so the
+    // export is clearly organized by server type rather than a flat dump.
+    const groups = new Map();
+    newRows.forEach(r => {
+      const s = normalize(r['Server']) || 'Uncategorized';
+      if (!groups.has(s)) groups.set(s, []);
+      groups.get(s).push(r);
+    });
+    const names = Array.from(groups.keys()).sort((a,b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+    });
+
+    const aoa = [cols];
+    names.forEach(name => {
+      groups.get(name).forEach((r, idx) => {
+        aoa.push(cols.map((c, ci) => ci === 0 ? (idx === 0 ? name : '') : normalize(r[c])));
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // Merge the Server column for each contiguous host block, same visual style
+    // as the rest of the tool's exports.
+    const merges = [];
+    let rowCursor = 1;
+    names.forEach(name => {
+      const count = groups.get(name).length;
+      if (count > 1) {
+        merges.push({ s: { r: rowCursor, c: 0 }, e: { r: rowCursor + count - 1, c: 0 } });
+      }
+      rowCursor += count;
+    });
+    ws['!merges'] = merges;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'New Entries');
+    XLSX.writeFile(wb, `mpn_new_entries_${todayStamp()}.xlsx`);
+  });
+
+  // ---- Publish current data as the new default (bake into a fresh standalone .html) ----
+  // ---- Refresh from the shared database (safety net if the live subscription hiccups) ----
+  reloadDefaultBtn.addEventListener('click', async () => {
+    reloadDefaultBtn.disabled = true;
+    reloadDefaultBtn.textContent = 'Refreshing…';
+    try {
+      const { data: parts } = await client.models.Part.list();
+      allRows = parts.map(toDisplayRow);
+      renderSidebar();
+      renderContent();
+    } catch (err) {
+      alert('Could not refresh from the database: ' + err.message);
+    } finally {
+      reloadDefaultBtn.disabled = false;
+      reloadDefaultBtn.textContent = 'Refresh from database';
+    }
+  });
+
+  // ---- Start New Pilot: permanently wipe every shared part, for everyone ----
+  newPilotBtn.addEventListener('click', async () => {
+    const step1 = confirm('Start a new pilot?\n\nThis will PERMANENTLY delete every part and host model for EVERYONE using this tool — this is a real, shared database, not a local copy. Make sure anything worth keeping has already been exported.\n\nContinue?');
+    if (!step1) return;
+    const step2 = confirm('Are you absolutely sure? This clears the shared list down to zero parts for the whole team, right now.');
+    if (!step2) return;
+
+    const newName = prompt('Name for the new pilot (shown in the header, for everyone):', pilotName || '');
+    if (newName === null) return;
+
+    newPilotBtn.disabled = true;
+    newPilotBtn.textContent = 'Clearing…';
+    try {
+      const idsToDelete = allRows.map(r => r._id);
+      await runWithConcurrency(idsToDelete, (id) => client.models.Part.delete({ id }), 15);
+      if (pilotConfigId) {
+        await client.models.PilotConfig.update({ id: pilotConfigId, pilotName: newName.trim() });
+      }
+      alert('Clean slate ready for everyone. Add MPNs or bulk-import a source .xlsx to start building the new pilot\'s list.');
+    } catch (err) {
+      alert('Something went wrong clearing the shared data: ' + err.message);
+    } finally {
+      newPilotBtn.disabled = false;
+      newPilotBtn.textContent = 'Start new pilot (clean slate)';
+    }
+  });
+
+  searchEl.addEventListener('input', () => { renderSidebar(); renderContent(); });
+  partTypeFilterEl.addEventListener('change', () => { renderSidebar(); renderContent(); });
+  scannableFilterEl.addEventListener('change', () => { renderSidebar(); renderContent(); });
+
+  // ---- Bulk-import a source .xlsx into the shared database ----
+  function findMpnSheetName(wb) {
+    return wb.SheetNames.find(n => n.toLowerCase().includes('mpn by host')) || wb.SheetNames[0];
+  }
+
+  function parseSheetToRows(ws) {
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    // raw[0] may be a title row, header row (with "Server" in col A) can be row 0 or row 1
+    const headerRowIdx = raw.findIndex(r => normalize(r[0]).toLowerCase() === 'server');
+    const startIdx = headerRowIdx >= 0 ? headerRowIdx + 1 : 2;
+    let last = 'Uncategorized';
+    const newRows = [];
+    for (let i = startIdx; i < raw.length; i++) {
+      const row = raw[i];
+      const a = normalize(row[0]);
+      if (a) last = a;
+      const restEmpty = row.slice(1,6).every(v => normalize(v) === '');
+      if (restEmpty) continue;
+      const rec = {};
+      COLUMNS.forEach((col, idx) => { rec[col] = row[idx] !== undefined ? row[idx] : ''; });
+      rec['Server'] = last;
+      newRows.push(rec);
+    }
+    return newRows;
+  }
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'array' });
+        const sheetName = findMpnSheetName(wb);
+        const newRows = parseSheetToRows(wb.Sheets[sheetName]);
+        if (!confirm(`This will add ${newRows.length} rows to the SHARED database for everyone. Continue?`)) {
+          fileInput.value = '';
+          return;
+        }
+        await runWithConcurrency(newRows, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 10);
+        alert(`Added ${newRows.length} rows to the shared database.`);
+      } catch (err) {
+        alert('Could not parse or import that file: ' + err.message);
+      } finally {
+        fileInput.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  // ---- Boot: seed the shared tables on the very first run, then subscribe live ----
+  contentEl.innerHTML = '<div class="empty-state">Connecting to the shared database…</div>';
+
+  async function boot() {
+    try {
+      const { data: existingParts } = await client.models.Part.list({ limit: 1 });
+      if (existingParts.length === 0 && EMBEDDED_DATA.length > 0) {
+        contentEl.innerHTML = `<div class="empty-state">First-time setup — loading ${EMBEDDED_DATA.length} starter parts into the shared database. This only happens once and may take a minute…</div>`;
+        await runWithConcurrency(EMBEDDED_DATA, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 15);
+      }
+
+      const { data: existingMfgs } = await client.models.Manufacturer.list({ limit: 1 });
+      if (existingMfgs.length === 0 && MFG_CONFIG.length > 0) {
+        await runWithConcurrency(MFG_CONFIG, (name) => client.models.Manufacturer.create({ name }), 15);
+      }
+
+      const { data: pilotRows } = await client.models.PilotConfig.list();
+      if (pilotRows.length === 0) {
+        const { data: created } = await client.models.PilotConfig.create({ pilotName: PILOT_NAME });
+        pilotConfigId = created.id;
+        pilotName = created.pilotName || '';
+      } else {
+        pilotConfigId = pilotRows[0].id;
+        pilotName = pilotRows[0].pilotName || '';
+      }
+      renderPilotName();
+    } catch (err) {
+      contentEl.innerHTML = `<div class="empty-state">Could not connect to the shared database: ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+
+    // Live subscriptions — this is the actual "auto collect everyone's entries"
+    // mechanism. Every add/edit/delete from ANY browser pushes here instantly.
+    client.models.PilotConfig.observeQuery().subscribe({
+      next: ({ items }) => {
+        const rec = items.find(i => i.id === pilotConfigId) || items[0];
+        if (rec) {
+          pilotConfigId = rec.id;
+          pilotName = rec.pilotName || '';
+          renderPilotName();
+        }
+      }
+    });
+
+    client.models.Manufacturer.observeQuery().subscribe({
+      next: ({ items }) => {
+        manufacturersConfig = items.map(i => i.name).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
+        manufacturerIdByName = new Map(items.map(i => [i.name.toLowerCase(), i.id]));
+        if (mfgModalOverlay.classList.contains('open')) renderMfgList();
+      }
+    });
+
+    client.models.Part.observeQuery().subscribe({
+      next: ({ items }) => {
+        allRows = items.map(toDisplayRow);
+        renderSidebar();
+        renderContent();
+      }
+    });
+  }
+
+  boot();
+</script>
+</body>
+</html>

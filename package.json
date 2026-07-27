@@ -1,0 +1,16 @@
+{
+  "name": "mpn-host-mapping",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "sandbox": "ampx sandbox"
+  },
+  "dependencies": {
+    "aws-amplify": "^6.6.0"
+  },
+  "devDependencies": {
+    "@aws-amplify/backend": "^1.0.0",
+    "@aws-amplify/backend-cli": "^1.0.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,19 @@
+version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - npm ci
+        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+frontend:
+  phases:
+    build:
+      commands:
+        - echo "No build step needed — index.html is plain static HTML/JS"
+  artifacts:
+    baseDirectory: .
+    files:
+      - index.html
+      - amplify_outputs.json
+  cache:
+    paths: []
