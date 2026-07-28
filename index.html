@@ -301,12 +301,13 @@
   .row-actions button {
     background: none;
     border: none;
-    color: var(--no);
     cursor: pointer;
     font-size: 12px;
     padding: 2px 6px;
   }
   .row-actions button:hover { text-decoration: underline; }
+  .row-actions .edit-row-btn { color: var(--accent); }
+  .row-actions .delete-row-btn { color: var(--no); }
 
   .modal-overlay {
     display: none;
@@ -486,8 +487,8 @@
 
 <div id="modalOverlay" class="modal-overlay">
   <div class="modal">
-    <h3>Add a new MPN</h3>
-    <div class="modal-sub">Fill in the fields below. Pick an existing host model or type a brand new one.</div>
+    <h3 id="mpnModalTitle">Add a new MPN</h3>
+    <div class="modal-sub" id="mpnModalSub">Fill in the fields below. Pick an existing host model or type a brand new one.</div>
     <form id="addMpnForm">
       <div class="form-row">
         <label>Server / Host model</label>
@@ -550,7 +551,7 @@
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="cancelAddBtn">Cancel</button>
-        <button type="submit" class="btn-primary">Add MPN</button>
+        <button type="submit" class="btn-primary" id="mpnSubmitBtn">Add MPN</button>
       </div>
     </form>
   </div>
@@ -1012,7 +1013,7 @@
             html += `<td>${escapeHtml(normalize(r[col]) || '—')}</td>`;
           }
         });
-        html += `<td class="row-actions">${r._manual ? '<button class="delete-row-btn" title="Remove this manually added row">Delete</button>' : ''}</td>`;
+        html += `<td class="row-actions"><button class="edit-row-btn" data-id="${escapeHtml(r._id)}" title="Edit this entry">Edit</button>${r._manual ? '<button class="delete-row-btn" title="Remove this manually added row">Delete</button>' : ''}</td>`;
         html += '</tr>';
       });
       html += `</tbody></table>`;
@@ -1159,6 +1160,7 @@
             <table><thead><tr>`;
         html += `<th class="checkbox-col"><input type="checkbox" class="group-select-all" data-group="${escapeHtml(name)}"></th>`;
         displayCols.forEach(col => { html += `<th>${escapeHtml(col)}</th>`; });
+        html += `<th>&nbsp;</th>`;
         html += `</tr></thead><tbody>`;
         groupRows.forEach(r => {
           html += `<tr data-id="${escapeHtml(r._id)}">`;
@@ -1178,6 +1180,7 @@
               html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
             }
           });
+          html += `<td class="row-actions"><button class="edit-row-btn" data-id="${escapeHtml(r._id)}" title="Edit this entry">Edit</button></td>`;
           html += '</tr>';
         });
         html += `</tbody></table></div>`;
@@ -1297,6 +1300,7 @@
             <table><thead><tr>`;
         html += `<th class="checkbox-col"><input type="checkbox" class="group-select-all" data-group="${escapeHtml(name)}"></th>`;
         displayCols.forEach(col => { html += `<th>${escapeHtml(col)}</th>`; });
+        html += `<th>&nbsp;</th>`;
         html += `</tr></thead><tbody>`;
         groupRows.forEach(r => {
           const notInEv = normalize(r["Added to eViridis"]).toLowerCase() !== 'yes';
@@ -1317,6 +1321,7 @@
               html += `<td>${escapeHtml(normalize(r[col]) || '—')}${r._manual ? '<span class="badge manual">manual</span>' : ''}</td>`;
             }
           });
+          html += `<td class="row-actions"><button class="edit-row-btn" data-id="${escapeHtml(r._id)}" title="Edit this entry">Edit</button></td>`;
           html += '</tr>';
         });
         html += `</tbody></table></div>`;
@@ -1381,7 +1386,16 @@
     }
   }
 
-  function openModal() {
+  let editingRowId = null;
+
+  function openModal(row) {
+    editingRowId = row ? row._id : null;
+    document.getElementById('mpnModalTitle').textContent = row ? 'Edit MPN' : 'Add a new MPN';
+    document.getElementById('mpnModalSub').textContent = row
+      ? 'Update the fields below and save your changes.'
+      : "Fill in the fields below. Pick an existing host model or type a brand new one.";
+    document.getElementById('mpnSubmitBtn').textContent = row ? 'Save changes' : 'Add MPN';
+
     const servers = Array.from(new Set(allRows.map(r => normalize(r["Server"])).filter(Boolean))).sort();
     const mfgsInUse = allRows.map(r => normalize(r["Manufacturer"])).filter(Boolean);
     const mfgs = Array.from(new Set([...manufacturersConfig, ...mfgsInUse])).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
@@ -1389,15 +1403,40 @@
     document.getElementById('serverOptions').innerHTML = servers.map(s => `<option value="${escapeHtml(s)}">`).join('');
     document.getElementById('mfgOptions').innerHTML = mfgs.map(s => `<option value="${escapeHtml(s)}">`).join('');
     document.getElementById('partTypeOptions').innerHTML = partTypes.map(s => `<option value="${escapeHtml(s)}">`).join('');
-    if (activeServer) document.getElementById('f_server').value = activeServer;
+
+    if (row) {
+      document.getElementById('f_server').value = normalize(row['Server']);
+      document.getElementById('f_mfg').value = normalize(row['Manufacturer']);
+      document.getElementById('f_coo').value = normalize(row['COO']);
+      document.getElementById('f_apn').value = normalize(row['APN (DPN)']);
+      document.getElementById('f_mpn').value = normalize(row['MPN (PWB)']);
+      document.getElementById('f_parttype').value = normalize(row['Part Type']);
+      document.getElementById('f_desc').value = normalize(row['Description']);
+      document.getElementById('f_added').value = normalize(row['Added to eViridis']);
+      document.getElementById('f_scan').value = normalize(row['Scannable MPN']);
+      document.getElementById('f_comment').value = normalize(row['Comment']);
+    } else {
+      addMpnForm.reset();
+      if (activeServer) document.getElementById('f_server').value = activeServer;
+    }
+
     modalOverlay.classList.add('open');
     document.getElementById('f_server').focus();
   }
   function closeModal() {
     modalOverlay.classList.remove('open');
     addMpnForm.reset();
+    editingRowId = null;
   }
-  addMpnBtn.addEventListener('click', openModal);
+  addMpnBtn.addEventListener('click', () => openModal());
+
+  contentEl.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.edit-row-btn');
+    if (!editBtn) return;
+    const id = editBtn.getAttribute('data-id');
+    const row = allRows.find(r => r._id === id);
+    if (row) openModal(row);
+  });
 
   // ---- Admin dropdown menu ----
   adminMenuBtn.addEventListener('click', (e) => {
@@ -1533,22 +1572,24 @@
 
   addMpnForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const isEditing = !!editingRowId;
     const server = document.getElementById('f_server').value.trim() || 'Uncategorized';
     const mpn = document.getElementById('f_mpn').value.trim();
     if (!mpn) return;
 
     const mpnNorm = mpn.toLowerCase();
     const serverNorm = server.toLowerCase();
-    const dupSameHost = allRows.find(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() === serverNorm);
-    const dupOtherHosts = allRows.filter(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() !== serverNorm);
+    const otherRows = allRows.filter(r => r._id !== editingRowId);
+    const dupSameHost = otherRows.find(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() === serverNorm);
+    const dupOtherHosts = otherRows.filter(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() !== serverNorm);
 
     if (dupSameHost) {
       const desc = normalize(dupSameHost['Description']) || '(no description)';
-      const proceed = confirm(`This MPN "${mpn}" already exists under "${server}":\n${desc}\n\nAdd it again anyway?`);
+      const proceed = confirm(`This MPN "${mpn}" already exists under "${server}":\n${desc}\n\n${isEditing ? 'Save this change anyway?' : 'Add it again anyway?'}`);
       if (!proceed) return;
     } else if (dupOtherHosts.length > 0) {
       const hosts = Array.from(new Set(dupOtherHosts.map(r => normalize(r['Server'])))).join(', ');
-      const proceed = confirm(`This MPN "${mpn}" already exists under other host model(s): ${hosts}.\n\nAdd it for "${server}" as well?`);
+      const proceed = confirm(`This MPN "${mpn}" already exists under other host model(s): ${hosts}.\n\n${isEditing ? 'Save it for' : 'Add it for'} "${server}" as well?`);
       if (!proceed) return;
     }
 
@@ -1566,6 +1607,7 @@
       "_manual": true
     };
 
+    const idToSave = editingRowId;
     activeServer = server;
     viewMode = 'host';
     sortState = { col: null, dir: 1 };
@@ -1574,12 +1616,17 @@
     renderContent();
 
     try {
-      await client.models.Part.create(toCreateInput(rec));
+      if (isEditing) {
+        const input = toCreateInput(rec);
+        await client.models.Part.update({ id: idToSave, ...input });
+      } else {
+        await client.models.Part.create(toCreateInput(rec));
+      }
       if (rec['Manufacturer'] && !manufacturersConfig.some(m => m.toLowerCase() === rec['Manufacturer'].toLowerCase())) {
         await client.models.Manufacturer.create({ name: rec['Manufacturer'] });
       }
     } catch (err) {
-      alert('Could not save this MPN — it may not have been added for everyone: ' + err.message);
+      alert('Could not save this MPN — it may not have been saved for everyone: ' + err.message);
     }
   });
 
