@@ -452,7 +452,7 @@
 <body>
 
 <header>
-  <h1>MPN by Host Mapping <span id="pilotNameDisplay" class="pilot-tag"></span></h1>
+  <h1 id="pilotNameDisplay">MPN by Host Mapping Viewer</h1>
   <div class="sub">Browse parts grouped by server / host model. Add MPNs, export your additions at end of day, and hand them to whoever hosts this tool.</div>
   <div class="toolbar">
     <input type="text" id="search" placeholder="Search all hosts: MPN, APN, description, mfg...">
@@ -491,8 +491,8 @@
     <div class="modal-sub" id="mpnModalSub">Fill in the fields below. Pick an existing host model or type a brand new one.</div>
     <form id="addMpnForm">
       <div class="form-row">
-        <label>Server / Host model</label>
-        <input type="text" id="f_server" list="serverOptions" placeholder="e.g. PowerEdge R940, a new host name, or leave blank for Uncategorized">
+        <label>Server / Host models (comma-separated for more than one)</label>
+        <input type="text" id="f_server" list="serverOptions" placeholder="e.g. PowerEdge R730xd, PowerEdge R740xd — leave blank for Uncategorized">
         <datalist id="serverOptions"></datalist>
       </div>
       <div class="form-grid">
@@ -641,10 +641,14 @@
 
   // Map between the tool's display-row shape and Amplify's Part records.
   function toDisplayRow(item) {
+    const servers = Array.isArray(item.servers) && item.servers.filter(Boolean).length
+      ? item.servers.filter(Boolean)
+      : ['Uncategorized'];
     return {
       _id: item.id,
       _manual: !!item.isManual,
-      "Server": item.server || '',
+      "Servers": servers,
+      "Server": servers.join(', '),
       "Manufacturer": item.manufacturer || '',
       "COO": item.coo || '',
       "APN (DPN)": item.apn || '',
@@ -657,8 +661,17 @@
     };
   }
   function toCreateInput(row) {
+    let servers;
+    if (Array.isArray(row["Servers"]) && row["Servers"].filter(Boolean).length) {
+      servers = row["Servers"].map(s => normalize(s)).filter(Boolean);
+    } else if (row["Server"]) {
+      // Backward-compatible: plain single-string "Server" (from the seed
+      // dataset or a classic single-host source .xlsx) becomes a one-item list.
+      servers = String(row["Server"]).split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (!servers || servers.length === 0) servers = ['Uncategorized'];
     return {
-      server: row["Server"] || 'Uncategorized',
+      servers,
       manufacturer: row["Manufacturer"] || '',
       coo: row["COO"] || '',
       apn: row["APN (DPN)"] || '',
@@ -670,6 +683,28 @@
       comment: row["Comment"] || '',
       isManual: row._manual !== undefined ? row._manual : true,
     };
+  }
+
+  // Groups display-rows by host. A part linked to multiple servers appears
+  // in every one of its host groups (same underlying row, multiple buckets).
+  function groupRowsByServer(rows) {
+    const groups = new Map();
+    rows.forEach(r => {
+      const list = (Array.isArray(r["Servers"]) && r["Servers"].length) ? r["Servers"] : ['Uncategorized'];
+      list.forEach(s => {
+        const key = normalize(s) || 'Uncategorized';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+      });
+    });
+    return groups;
+  }
+  function sortServerNames(names) {
+    return names.slice().sort((a, b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
   }
 
   // Runs `worker` over `items` with a concurrency cap, so bulk operations
@@ -742,20 +777,16 @@
   const backupsListEl = document.getElementById('backupsList');
 
   function renderPilotName() {
-    pilotNameDisplay.textContent = pilotName || '';
+    const name = pilotName || 'MPN by Host Mapping Viewer';
+    pilotNameDisplay.textContent = name;
+    document.title = name;
   }
   renderPilotName();
 
   function normalize(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
 
   function getServerGroups(rows) {
-    const map = new Map();
-    rows.forEach(r => {
-      const s = normalize(r["Server"]) || "Uncategorized";
-      if (!map.has(s)) map.set(s, []);
-      map.get(s).push(r);
-    });
-    return map;
+    return groupRowsByServer(rows);
   }
 
   function renderSidebar() {
@@ -778,8 +809,11 @@
         if (scanFilter && normalize(r["Scannable MPN"]).toLowerCase() !== scanFilter.toLowerCase()) return;
         const hay = COLUMNS.map(c => normalize(r[c]).toLowerCase()).join(' | ');
         if (!hay.includes(q)) return;
-        const s = normalize(r["Server"]) || "Uncategorized";
-        matchCounts.set(s, (matchCounts.get(s) || 0) + 1);
+        const list = (Array.isArray(r["Servers"]) && r["Servers"].length) ? r["Servers"] : ['Uncategorized'];
+        list.forEach(s => {
+          const key = normalize(s) || 'Uncategorized';
+          matchCounts.set(key, (matchCounts.get(key) || 0) + 1);
+        });
       });
       names = names.filter(n => matchCounts.has(n));
     }
@@ -1121,17 +1155,8 @@
     const visibleIds = new Set(rows.map(r => r._id));
     Array.from(selectedIds).forEach(id => { if (!visibleIds.has(id)) selectedIds.delete(id); });
 
-    const groups = new Map();
-    rows.forEach(r => {
-      const s = normalize(r["Server"]) || "Uncategorized";
-      if (!groups.has(s)) groups.set(s, []);
-      groups.get(s).push(r);
-    });
-    const names = Array.from(groups.keys()).sort((a,b) => {
-      if (a === 'Uncategorized') return 1;
-      if (b === 'Uncategorized') return -1;
-      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-    });
+    const groups = groupRowsByServer(rows);
+    const names = sortServerNames(Array.from(groups.keys()));
 
     const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Scannable MPN","Added to eViridis","Comment"];
 
@@ -1261,17 +1286,8 @@
     const visibleIds = new Set(rows.map(r => r._id));
     Array.from(selectedIds).forEach(id => { if (!visibleIds.has(id)) selectedIds.delete(id); });
 
-    const groups = new Map();
-    rows.forEach(r => {
-      const s = normalize(r["Server"]) || "Uncategorized";
-      if (!groups.has(s)) groups.set(s, []);
-      groups.get(s).push(r);
-    });
-    const names = Array.from(groups.keys()).sort((a,b) => {
-      if (a === 'Uncategorized') return 1;
-      if (b === 'Uncategorized') return -1;
-      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-    });
+    const groups = groupRowsByServer(rows);
+    const names = sortServerNames(Array.from(groups.keys()));
 
     const displayCols = ["Manufacturer","COO","APN (DPN)","MPN (PWB)","Part Type","Description","Added to eViridis","Scannable MPN","Comment"];
 
@@ -1396,7 +1412,14 @@
       : "Fill in the fields below. Pick an existing host model or type a brand new one.";
     document.getElementById('mpnSubmitBtn').textContent = row ? 'Save changes' : 'Add MPN';
 
-    const servers = Array.from(new Set(allRows.map(r => normalize(r["Server"])).filter(Boolean))).sort();
+    const allServerNames = new Set();
+    allRows.forEach(r => {
+      (Array.isArray(r["Servers"]) ? r["Servers"] : []).forEach(s => {
+        const n = normalize(s);
+        if (n) allServerNames.add(n);
+      });
+    });
+    const servers = sortServerNames(Array.from(allServerNames)).filter(s => s !== 'Uncategorized');
     const mfgsInUse = allRows.map(r => normalize(r["Manufacturer"])).filter(Boolean);
     const mfgs = Array.from(new Set([...manufacturersConfig, ...mfgsInUse])).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
     const partTypes = Array.from(new Set(allRows.map(r => normalize(r["Part Type"])).filter(Boolean))).sort();
@@ -1573,28 +1596,38 @@
   addMpnForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const isEditing = !!editingRowId;
-    const server = document.getElementById('f_server').value.trim() || 'Uncategorized';
+    const serverList = document.getElementById('f_server').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const serversForRecord = serverList.length ? serverList : ['Uncategorized'];
+    const serverNormsSet = new Set(serversForRecord.map(s => s.toLowerCase()));
     const mpn = document.getElementById('f_mpn').value.trim();
     if (!mpn) return;
 
     const mpnNorm = mpn.toLowerCase();
-    const serverNorm = server.toLowerCase();
     const otherRows = allRows.filter(r => r._id !== editingRowId);
-    const dupSameHost = otherRows.find(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() === serverNorm);
-    const dupOtherHosts = otherRows.filter(r => normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm && normalize(r['Server']).toLowerCase() !== serverNorm);
+    const rowServerNorms = r => (Array.isArray(r["Servers"]) ? r["Servers"] : []).map(s => s.toLowerCase());
+    const dupSameHost = otherRows.find(r =>
+      normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm &&
+      rowServerNorms(r).some(s => serverNormsSet.has(s))
+    );
+    const dupOtherHosts = otherRows.filter(r =>
+      normalize(r['MPN (PWB)']).toLowerCase() === mpnNorm &&
+      !rowServerNorms(r).some(s => serverNormsSet.has(s))
+    );
+    const serversLabel = serversForRecord.join(', ');
 
     if (dupSameHost) {
       const desc = normalize(dupSameHost['Description']) || '(no description)';
-      const proceed = confirm(`This MPN "${mpn}" already exists under "${server}":\n${desc}\n\n${isEditing ? 'Save this change anyway?' : 'Add it again anyway?'}`);
+      const proceed = confirm(`This MPN "${mpn}" already exists under "${dupSameHost['Server']}":\n${desc}\n\n${isEditing ? 'Save this change anyway?' : 'Add it again anyway?'}`);
       if (!proceed) return;
     } else if (dupOtherHosts.length > 0) {
-      const hosts = Array.from(new Set(dupOtherHosts.map(r => normalize(r['Server'])))).join(', ');
-      const proceed = confirm(`This MPN "${mpn}" already exists under other host model(s): ${hosts}.\n\n${isEditing ? 'Save it for' : 'Add it for'} "${server}" as well?`);
+      const hosts = Array.from(new Set(dupOtherHosts.map(r => r['Server']))).join(', ');
+      const proceed = confirm(`This MPN "${mpn}" already exists under other host model(s): ${hosts}.\n\n${isEditing ? 'Save it for' : 'Add it for'} "${serversLabel}" as well?`);
       if (!proceed) return;
     }
 
     const rec = {
-      "Server": server,
+      "Servers": serversForRecord,
       "Manufacturer": document.getElementById('f_mfg').value.trim(),
       "COO": document.getElementById('f_coo').value.trim(),
       "APN (DPN)": document.getElementById('f_apn').value.trim(),
@@ -1608,7 +1641,7 @@
     };
 
     const idToSave = editingRowId;
-    activeServer = server;
+    activeServer = serversForRecord[0];
     viewMode = 'host';
     sortState = { col: null, dir: 1 };
     closeModal();
@@ -1696,17 +1729,8 @@
       // Group by host/server, sorted the same way the rest of the tool does
       // (alphabetical, Uncategorized last), then merge each host's Server
       // cells into one block — matching the original source file's layout.
-      const groups = new Map();
-      rows.forEach(r => {
-        const s = normalize(r['Server']) || 'Uncategorized';
-        if (!groups.has(s)) groups.set(s, []);
-        groups.get(s).push(r);
-      });
-      const names = Array.from(groups.keys()).sort((a,b) => {
-        if (a === 'Uncategorized') return 1;
-        if (b === 'Uncategorized') return -1;
-        return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-      });
+      const groups = groupRowsByServer(rows);
+      const names = sortServerNames(Array.from(groups.keys()));
 
       const aoa = [cols];
       names.forEach(name => {
@@ -1787,17 +1811,8 @@
 
       // Group by host/server, sorted alphabetically (Uncategorized last), so the
       // export is clearly organized by server type rather than a flat dump.
-      const groups = new Map();
-      newRows.forEach(r => {
-        const s = normalize(r['Server']) || 'Uncategorized';
-        if (!groups.has(s)) groups.set(s, []);
-        groups.get(s).push(r);
-      });
-      const names = Array.from(groups.keys()).sort((a,b) => {
-        if (a === 'Uncategorized') return 1;
-        if (b === 'Uncategorized') return -1;
-        return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-      });
+      const groups = groupRowsByServer(newRows);
+      const names = sortServerNames(Array.from(groups.keys()));
 
       const aoa = [cols];
       names.forEach(name => {

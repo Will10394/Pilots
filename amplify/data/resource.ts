@@ -18,7 +18,7 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 const schema = a.schema({
   Part: a
     .model({
-      server: a.string().required(),          // host model, e.g. "PowerEdge R940"
+      servers: a.string().array(), // host models this part applies to, e.g. ["PowerEdge R730xd", "PowerEdge R740xd"]
       manufacturer: a.string(),
       coo: a.string(),                          // country of origin
       apn: a.string(),                          // APN (DPN)
