@@ -55,6 +55,8 @@ const schema = a.schema({
   TimeEntry: a
     .model({
       label: a.string(),                   // what was being worked on
+      performedBy: a.string(),              // who did the work
+      timedBy: a.string(),                  // who ran the stopwatch
       durationSeconds: a.integer().required(),
       startedAt: a.string(),                // ISO timestamp
       endedAt: a.string(),                  // ISO timestamp

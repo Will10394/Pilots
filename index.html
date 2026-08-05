@@ -330,7 +330,9 @@
   }
   .row-actions button:hover { text-decoration: underline; }
   .row-actions .edit-row-btn { color: var(--accent); }
-  .row-actions .delete-row-btn { color: var(--no); }
+  .row-actions .delete-row-btn,
+  .row-actions .delete-time-btn,
+  .row-actions .delete-serial-btn { color: var(--no); font-weight: 600; }
 
   .modal-overlay {
     display: none;
@@ -476,9 +478,10 @@
   .stopwatch-display.running { color: var(--accent2); }
   .stopwatch-label-row {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
     gap: 10px;
-    margin: 18px 0;
+    margin: 12px 0;
   }
   .stopwatch-label-row input {
     width: 320px;
@@ -491,6 +494,7 @@
     font-size: 13.5px;
     text-align: center;
   }
+  .stopwatch-label-row:nth-of-type(2) input { width: 210px; }
   .stopwatch-buttons { display: flex; justify-content: center; gap: 10px; }
   .stopwatch-buttons button {
     padding: 10px 22px;
@@ -1537,6 +1541,8 @@
 
   // ================== Time Tracking tab ==================
   let stopwatchLabelValue = '';
+  let stopwatchPerformedBy = '';
+  let stopwatchTimedBy = '';
 
   function formatDuration(ms) {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -1569,6 +1575,8 @@
   async function stopAndSaveStopwatch() {
     const elapsedMs = currentTimerMs();
     const label = stopwatchLabelValue.trim();
+    const performedBy = stopwatchPerformedBy.trim();
+    const timedBy = stopwatchTimedBy.trim();
     const startedAtIso = timerStartedAt ? new Date(timerStartedAt).toISOString() : new Date().toISOString();
     const endedAtIso = new Date().toISOString();
     const durationSeconds = Math.max(1, Math.round(elapsedMs / 1000));
@@ -1577,21 +1585,35 @@
     timerStartedAt = null;
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     stopwatchLabelValue = '';
+    // Performed by / Timed by usually stay the same across back-to-back
+    // sessions, so they're intentionally NOT cleared here.
     renderContent();
 
     try {
-      await client.models.TimeEntry.create({ label, durationSeconds, startedAt: startedAtIso, endedAt: endedAtIso });
+      await client.models.TimeEntry.create({ label, performedBy, timedBy, durationSeconds, startedAt: startedAtIso, endedAt: endedAtIso });
     } catch (err) {
       alert('Could not save this time entry: ' + err.message);
     }
   }
 
+  async function loadAllTimeEntries() {
+    try {
+      const items = await listAllRecords(client.models.TimeEntry);
+      timeEntries = items;
+      if (viewMode === 'timeTracking') renderContent();
+    } catch (err) {
+      console.error('Could not load full time log:', err);
+    }
+  }
+
   function exportTimeLog() {
     const sorted = timeEntries.slice().sort((a,b) => new Date(a.startedAt || 0) - new Date(b.startedAt || 0));
-    const aoa = [["Label","Duration (h:mm:ss)","Duration (seconds)","Started","Ended"]];
+    const aoa = [["Label","Performed By","Timed By","Duration (h:mm:ss)","Duration (seconds)","Started","Ended"]];
     sorted.forEach(t => {
       aoa.push([
         t.label || '',
+        t.performedBy || '',
+        t.timedBy || '',
         formatDuration((t.durationSeconds || 0) * 1000),
         t.durationSeconds || 0,
         t.startedAt ? new Date(t.startedAt).toLocaleString() : '',
@@ -1618,6 +1640,10 @@
         <div class="stopwatch-label-row">
           <input type="text" id="stopwatchLabelInput" placeholder="What are you working on? (optional)" value="${escapeHtml(stopwatchLabelValue)}">
         </div>
+        <div class="stopwatch-label-row">
+          <input type="text" id="stopwatchPerformedByInput" placeholder="Performed by" value="${escapeHtml(stopwatchPerformedBy)}">
+          <input type="text" id="stopwatchTimedByInput" placeholder="Timed by" value="${escapeHtml(stopwatchTimedBy)}">
+        </div>
         <div class="stopwatch-buttons">
           ${timerRunning
             ? `<button class="sw-stop" id="swStopBtn" type="button">Stop &amp; Save</button><button class="sw-reset" id="swResetBtn" type="button">Discard</button>`
@@ -1633,10 +1659,12 @@
     if (sorted.length === 0) {
       html += `<div class="empty-state">No time entries yet — hit Start above, then "Stop &amp; Save" when you're done.</div>`;
     } else {
-      html += `<table><thead><tr><th>Label</th><th>Duration</th><th>Started</th><th>Ended</th><th>&nbsp;</th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th>Label</th><th>Performed By</th><th>Timed By</th><th>Duration</th><th>Started</th><th>Ended</th><th>&nbsp;</th></tr></thead><tbody>`;
       sorted.forEach(t => {
         html += `<tr data-id="${escapeHtml(t.id)}">
             <td>${escapeHtml(t.label || '—')}</td>
+            <td>${escapeHtml(t.performedBy || '—')}</td>
+            <td>${escapeHtml(t.timedBy || '—')}</td>
             <td class="mono">${formatDuration((t.durationSeconds || 0) * 1000)}</td>
             <td>${t.startedAt ? escapeHtml(new Date(t.startedAt).toLocaleString()) : '—'}</td>
             <td>${t.endedAt ? escapeHtml(new Date(t.endedAt).toLocaleString()) : '—'}</td>
@@ -1650,6 +1678,10 @@
 
     const labelInput = document.getElementById('stopwatchLabelInput');
     if (labelInput) labelInput.addEventListener('input', (e) => { stopwatchLabelValue = e.target.value; });
+    const performedByInput = document.getElementById('stopwatchPerformedByInput');
+    if (performedByInput) performedByInput.addEventListener('input', (e) => { stopwatchPerformedBy = e.target.value; });
+    const timedByInput = document.getElementById('stopwatchTimedByInput');
+    if (timedByInput) timedByInput.addEventListener('input', (e) => { stopwatchTimedBy = e.target.value; });
 
     const startBtn = document.getElementById('swStartBtn');
     if (startBtn) startBtn.addEventListener('click', startStopwatch);
@@ -1863,6 +1895,7 @@
     searchEl.value = '';
     renderSidebar();
     renderContent();
+    loadAllTimeEntries();
   });
   document.getElementById('gotoSerialMappingBtn').addEventListener('click', () => {
     viewMode = 'serialMapping';
