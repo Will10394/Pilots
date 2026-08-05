@@ -188,6 +188,27 @@
     border-left-color: var(--no);
     color: #ffb3ae;
   }
+  .server-item.nav-blue {
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .server-item.nav-blue:last-of-type {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    padding-bottom: 11px;
+  }
+  .server-item.nav-blue .count {
+    background: rgba(79,140,255,0.18);
+    color: var(--accent);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+  .server-item.nav-blue.active {
+    background: rgba(79,140,255,0.1);
+    border-left-color: var(--accent);
+    color: #fff;
+  }
   #content {
     flex: 1;
     overflow-y: auto;
@@ -434,6 +455,55 @@
   th.checkbox-col, td.checkbox-col { width: 32px; text-align: center; padding-left: 14px; padding-right: 4px; }
   input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 
+  .stopwatch-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .stopwatch-display {
+    font-family: "SF Mono", Consolas, Menlo, monospace;
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .stopwatch-display.running { color: var(--accent2); }
+  .stopwatch-label-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .stopwatch-label-row input {
+    width: 320px;
+    max-width: 60vw;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    text-align: center;
+  }
+  .stopwatch-buttons { display: flex; justify-content: center; gap: 10px; }
+  .stopwatch-buttons button {
+    padding: 10px 22px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+  }
+  .stopwatch-buttons .sw-start { background: var(--accent2); color: #08211a; }
+  .stopwatch-buttons .sw-stop { background: var(--no); color: #fff; }
+  .stopwatch-buttons .sw-reset { background: var(--panel2); color: var(--muted); border: 1px solid var(--border); }
+  .stopwatch-buttons button:hover { filter: brightness(1.08); }
+  .stopwatch-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
+
   .host-group { margin-bottom: 26px; }
   .host-group-header {
     display: flex;
@@ -583,11 +653,48 @@
   </div>
 </div>
 
+<div id="serialModalOverlay" class="modal-overlay">
+  <div class="modal">
+    <h3 id="serialModalTitle">Add a serial number</h3>
+    <div class="modal-sub">Link a physical unit's serial number to an MPN type.</div>
+    <form id="serialForm">
+      <div class="form-row">
+        <label>Serial Number</label>
+        <input type="text" id="f_serial" placeholder="e.g. SN-2026-00417" required>
+      </div>
+      <div class="form-row">
+        <label>MPN</label>
+        <input type="text" id="f_serial_mpn" list="serialMpnOptions" placeholder="e.g. 0101A0F00-000-G">
+        <datalist id="serialMpnOptions"></datalist>
+      </div>
+      <div class="form-row">
+        <label>Part Type</label>
+        <input type="text" id="f_serial_parttype" list="serialPartTypeOptions" placeholder="e.g. Backplane">
+        <datalist id="serialPartTypeOptions"></datalist>
+      </div>
+      <div class="form-row">
+        <label>Notes</label>
+        <input type="text" id="f_serial_notes" placeholder="Optional">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="cancelSerialBtn">Cancel</button>
+        <button type="submit" class="btn-primary" id="serialSubmitBtn">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <main>
   <div id="sidebar">
     <div class="group-label">Views</div>
     <div id="notInEvNavItem" class="server-item nav-special">
       <span>⚠ Not in eViridis</span><span class="count" id="notInEvCount">0</span>
+    </div>
+    <div id="timeTrackingNavItem" class="server-item nav-blue">
+      <span>⏱ Time Tracking</span>
+    </div>
+    <div id="serialMappingNavItem" class="server-item nav-blue">
+      <span>🔢 Serial Numbers</span><span class="count" id="serialMappingCount">0</span>
     </div>
     <div class="group-label" style="margin-top:8px;">Server / Host Models</div>
     <div id="serverList"></div>
@@ -764,6 +871,9 @@
   const newPilotBtn = document.getElementById('newPilotBtn');
   const manageMfgBtn = document.getElementById('manageMfgBtn');
   const mfgModalOverlay = document.getElementById('mfgModalOverlay');
+  const serialModalOverlay = document.getElementById('serialModalOverlay');
+  const serialForm = document.getElementById('serialForm');
+  const cancelSerialBtn = document.getElementById('cancelSerialBtn');
   const closeMfgModalBtn = document.getElementById('closeMfgModalBtn');
   const addMfgBtn = document.getElementById('addMfgBtn');
   const newMfgInput = document.getElementById('f_new_mfg');
@@ -775,6 +885,15 @@
   const backupsModalOverlay = document.getElementById('backupsModalOverlay');
   const closeBackupsModalBtn = document.getElementById('closeBackupsModalBtn');
   const backupsListEl = document.getElementById('backupsList');
+  const timeTrackingNavItem = document.getElementById('timeTrackingNavItem');
+  const serialMappingNavItem = document.getElementById('serialMappingNavItem');
+  let timeEntries = [];
+  let serialMappings = [];
+  let timerRunning = false;
+  let timerStartedAt = null;    // ms timestamp when the current run began
+  let timerAccumulatedMs = 0;   // ms banked from previous start/stop segments in this session
+  let timerInterval = null;
+  let editingSerialId = null;
 
   function renderPilotName() {
     const name = pilotName || 'MPN by Host Mapping Viewer';
@@ -838,6 +957,9 @@
     const notInEvCount = allRows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes').length;
     document.getElementById('notInEvCount').textContent = notInEvCount;
     document.getElementById('notInEvNavItem').classList.toggle('active', viewMode === 'notInEv' && !q);
+    timeTrackingNavItem.classList.toggle('active', viewMode === 'timeTracking');
+    serialMappingNavItem.classList.toggle('active', viewMode === 'serialMapping');
+    document.getElementById('serialMappingCount').textContent = serialMappings.length;
 
     // populate part type filter once
     const types = Array.from(new Set(allRows.map(r => normalize(r["Part Type"])).filter(Boolean))).sort();
@@ -846,6 +968,19 @@
       types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
     partTypeFilterEl.value = types.includes(currentVal) ? currentVal : '';
   }
+
+  timeTrackingNavItem.addEventListener('click', () => {
+    viewMode = 'timeTracking';
+    searchEl.value = '';
+    renderSidebar();
+    renderContent();
+  });
+  serialMappingNavItem.addEventListener('click', () => {
+    viewMode = 'serialMapping';
+    searchEl.value = '';
+    renderSidebar();
+    renderContent();
+  });
 
   document.getElementById('notInEvNavItem').addEventListener('click', () => {
     viewMode = 'notInEv';
@@ -953,12 +1088,20 @@
   });
 
   function renderContent() {
-    if (searchEl.value.trim()) {
+    if (searchEl.value.trim() && (viewMode === 'host' || viewMode === 'notInEv')) {
       renderSearchResultsView(searchEl.value.trim());
       return;
     }
     if (viewMode === 'notInEv') {
       renderNotInEvView();
+      return;
+    }
+    if (viewMode === 'timeTracking') {
+      renderTimeTrackingView();
+      return;
+    }
+    if (viewMode === 'serialMapping') {
+      renderSerialMappingView();
       return;
     }
     if (!activeServer) {
@@ -1404,6 +1547,234 @@
 
   let editingRowId = null;
 
+  // ================== Time Tracking tab ==================
+  let stopwatchLabelValue = '';
+
+  function formatDuration(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  function currentTimerMs() {
+    return (timerRunning && timerStartedAt) ? (Date.now() - timerStartedAt) : 0;
+  }
+  function tickStopwatchDisplay() {
+    const el = document.getElementById('stopwatchDisplay');
+    if (el) el.textContent = formatDuration(currentTimerMs());
+  }
+  function startStopwatch() {
+    timerRunning = true;
+    timerStartedAt = Date.now();
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(tickStopwatchDisplay, 500);
+    renderContent();
+  }
+  function resetStopwatch() {
+    timerRunning = false;
+    timerStartedAt = null;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    renderContent();
+  }
+  async function stopAndSaveStopwatch() {
+    const elapsedMs = currentTimerMs();
+    const label = stopwatchLabelValue.trim();
+    const startedAtIso = timerStartedAt ? new Date(timerStartedAt).toISOString() : new Date().toISOString();
+    const endedAtIso = new Date().toISOString();
+    const durationSeconds = Math.max(1, Math.round(elapsedMs / 1000));
+
+    timerRunning = false;
+    timerStartedAt = null;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    stopwatchLabelValue = '';
+    renderContent();
+
+    try {
+      await client.models.TimeEntry.create({ label, durationSeconds, startedAt: startedAtIso, endedAt: endedAtIso });
+    } catch (err) {
+      alert('Could not save this time entry: ' + err.message);
+    }
+  }
+
+  function exportTimeLog() {
+    const sorted = timeEntries.slice().sort((a,b) => new Date(a.startedAt || 0) - new Date(b.startedAt || 0));
+    const aoa = [["Label","Duration (h:mm:ss)","Duration (seconds)","Started","Ended"]];
+    sorted.forEach(t => {
+      aoa.push([
+        t.label || '',
+        formatDuration((t.durationSeconds || 0) * 1000),
+        t.durationSeconds || 0,
+        t.startedAt ? new Date(t.startedAt).toLocaleString() : '',
+        t.endedAt ? new Date(t.endedAt).toLocaleString() : ''
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Time Log');
+    XLSX.writeFile(wb, `time_log_${todayStamp()}.xlsx`);
+  }
+
+  function renderTimeTrackingView() {
+    const sorted = timeEntries.slice().sort((a,b) => new Date(b.createdAt || b.startedAt || 0) - new Date(a.createdAt || a.startedAt || 0));
+    const totalSeconds = timeEntries.reduce((sum, t) => sum + (t.durationSeconds || 0), 0);
+
+    let html = `<div class="content-header">
+        <h2>Time Tracking</h2>
+        <span class="count-pill">${timeEntries.length} entr${timeEntries.length === 1 ? 'y' : 'ies'} logged · ${formatDuration(totalSeconds * 1000)} total</span>
+      </div>`;
+
+    html += `<div class="stopwatch-card">
+        <div class="stopwatch-display${timerRunning ? ' running' : ''}" id="stopwatchDisplay">${formatDuration(currentTimerMs())}</div>
+        <div class="stopwatch-label-row">
+          <input type="text" id="stopwatchLabelInput" placeholder="What are you working on? (optional)" value="${escapeHtml(stopwatchLabelValue)}">
+        </div>
+        <div class="stopwatch-buttons">
+          ${timerRunning
+            ? `<button class="sw-stop" id="swStopBtn" type="button">Stop &amp; Save</button><button class="sw-reset" id="swResetBtn" type="button">Discard</button>`
+            : `<button class="sw-start" id="swStartBtn" type="button">Start</button>`}
+        </div>
+      </div>`;
+
+    html += `<div class="content-header">
+        <h2 style="font-size:15px;">Log</h2>
+        ${timeEntries.length ? '<button class="file-btn" id="exportTimeLogBtn" type="button">Export time log (.xlsx)</button>' : ''}
+      </div>`;
+
+    if (sorted.length === 0) {
+      html += `<div class="empty-state">No time entries yet — hit Start above, then "Stop &amp; Save" when you're done.</div>`;
+    } else {
+      html += `<table><thead><tr><th>Label</th><th>Duration</th><th>Started</th><th>Ended</th><th>&nbsp;</th></tr></thead><tbody>`;
+      sorted.forEach(t => {
+        html += `<tr data-id="${escapeHtml(t.id)}">
+            <td>${escapeHtml(t.label || '—')}</td>
+            <td class="mono">${formatDuration((t.durationSeconds || 0) * 1000)}</td>
+            <td>${t.startedAt ? escapeHtml(new Date(t.startedAt).toLocaleString()) : '—'}</td>
+            <td>${t.endedAt ? escapeHtml(new Date(t.endedAt).toLocaleString()) : '—'}</td>
+            <td class="row-actions"><button class="delete-time-btn" data-id="${escapeHtml(t.id)}">Delete</button></td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+
+    contentEl.innerHTML = html;
+
+    const labelInput = document.getElementById('stopwatchLabelInput');
+    if (labelInput) labelInput.addEventListener('input', (e) => { stopwatchLabelValue = e.target.value; });
+
+    const startBtn = document.getElementById('swStartBtn');
+    if (startBtn) startBtn.addEventListener('click', startStopwatch);
+    const stopBtn = document.getElementById('swStopBtn');
+    if (stopBtn) stopBtn.addEventListener('click', stopAndSaveStopwatch);
+    const resetBtn = document.getElementById('swResetBtn');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+      if (confirm('Discard the current timer without saving an entry?')) resetStopwatch();
+    });
+
+    contentEl.querySelectorAll('.delete-time-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        if (!confirm('Delete this time entry?')) return;
+        try { await client.models.TimeEntry.delete({ id }); }
+        catch (err) { alert('Could not delete this entry: ' + err.message); }
+      });
+    });
+
+    const exportBtn = document.getElementById('exportTimeLogBtn');
+    if (exportBtn) exportBtn.addEventListener('click', exportTimeLog);
+  }
+
+  // ================== Serial Numbers tab ==================
+  function openSerialModal(rec) {
+    editingSerialId = rec ? rec.id : null;
+    document.getElementById('serialModalTitle').textContent = rec ? 'Edit serial number' : 'Add a serial number';
+    document.getElementById('serialSubmitBtn').textContent = rec ? 'Save changes' : 'Add';
+
+    const mpns = Array.from(new Set(allRows.map(r => normalize(r['MPN (PWB)'])).filter(Boolean))).sort();
+    const partTypes = Array.from(new Set(allRows.map(r => normalize(r['Part Type'])).filter(Boolean))).sort();
+    document.getElementById('serialMpnOptions').innerHTML = mpns.map(m => `<option value="${escapeHtml(m)}">`).join('');
+    document.getElementById('serialPartTypeOptions').innerHTML = partTypes.map(p => `<option value="${escapeHtml(p)}">`).join('');
+
+    document.getElementById('f_serial').value = rec ? (rec.serialNumber || '') : '';
+    document.getElementById('f_serial_mpn').value = rec ? (rec.mpn || '') : '';
+    document.getElementById('f_serial_parttype').value = rec ? (rec.partType || '') : '';
+    document.getElementById('f_serial_notes').value = rec ? (rec.notes || '') : '';
+
+    serialModalOverlay.classList.add('open');
+    document.getElementById('f_serial').focus();
+  }
+  function closeSerialModal() {
+    serialModalOverlay.classList.remove('open');
+    serialForm.reset();
+    editingSerialId = null;
+  }
+
+  function exportSerialMappings() {
+    const sorted = serialMappings.slice().sort((a,b) => normalize(a.serialNumber).localeCompare(normalize(b.serialNumber), undefined, {numeric:true, sensitivity:'base'}));
+    const aoa = [["Serial Number","MPN","Part Type","Notes"]];
+    sorted.forEach(s => aoa.push([s.serialNumber || '', s.mpn || '', s.partType || '', s.notes || '']));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Serial Numbers');
+    XLSX.writeFile(wb, `serial_numbers_${todayStamp()}.xlsx`);
+  }
+
+  function renderSerialMappingView() {
+    const sorted = serialMappings.slice().sort((a,b) => normalize(a.serialNumber).localeCompare(normalize(b.serialNumber), undefined, {numeric:true, sensitivity:'base'}));
+
+    let html = `<div class="content-header">
+        <h2>Serial Numbers</h2>
+        <span class="count-pill">${serialMappings.length} mapped</span>
+      </div>`;
+
+    html += `<div style="margin-bottom:14px; display:flex; gap:10px;">
+        <button class="file-btn" id="addSerialBtn" type="button">+ Add Serial Number</button>
+        ${serialMappings.length ? '<button class="file-btn" id="exportSerialBtn" type="button">Export (.xlsx)</button>' : ''}
+      </div>`;
+
+    if (sorted.length === 0) {
+      html += `<div class="empty-state">No serial numbers mapped yet — use "+ Add Serial Number" to link a serial to an MPN type. Handy for organizing inventory at the start of a pilot.</div>`;
+    } else {
+      html += `<table><thead><tr><th>Serial Number</th><th>MPN</th><th>Part Type</th><th>Notes</th><th>&nbsp;</th></tr></thead><tbody>`;
+      sorted.forEach(s => {
+        html += `<tr data-id="${escapeHtml(s.id)}">
+            <td class="mono">${escapeHtml(s.serialNumber || '—')}</td>
+            <td class="mono">${escapeHtml(s.mpn || '—')}</td>
+            <td>${escapeHtml(s.partType || '—')}</td>
+            <td>${escapeHtml(s.notes || '—')}</td>
+            <td class="row-actions">
+              <button class="edit-serial-btn" data-id="${escapeHtml(s.id)}">Edit</button>
+              <button class="delete-serial-btn" data-id="${escapeHtml(s.id)}">Delete</button>
+            </td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+
+    contentEl.innerHTML = html;
+
+    document.getElementById('addSerialBtn').addEventListener('click', () => openSerialModal());
+    const exportBtn = document.getElementById('exportSerialBtn');
+    if (exportBtn) exportBtn.addEventListener('click', exportSerialMappings);
+
+    contentEl.querySelectorAll('.edit-serial-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const rec = serialMappings.find(s => s.id === id);
+        if (rec) openSerialModal(rec);
+      });
+    });
+    contentEl.querySelectorAll('.delete-serial-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        if (!confirm('Delete this serial number mapping?')) return;
+        try { await client.models.SerialMapping.delete({ id }); }
+        catch (err) { alert('Could not delete this entry: ' + err.message); }
+      });
+    });
+  }
+
   function openModal(row) {
     editingRowId = row ? row._id : null;
     document.getElementById('mpnModalTitle').textContent = row ? 'Edit MPN' : 'Add a new MPN';
@@ -1515,6 +1886,33 @@
     mfgModalOverlay.classList.add('open');
     newMfgInput.value = '';
     newMfgInput.focus();
+  });
+
+  // ---- Serial Mapping modal wiring ----
+  cancelSerialBtn.addEventListener('click', closeSerialModal);
+  serialModalOverlay.addEventListener('click', (e) => { if (e.target === serialModalOverlay) closeSerialModal(); });
+  serialForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const serialNumber = document.getElementById('f_serial').value.trim();
+    if (!serialNumber) return;
+    const isEditing = !!editingSerialId;
+    const idToSave = editingSerialId;
+    const input = {
+      serialNumber,
+      mpn: document.getElementById('f_serial_mpn').value.trim(),
+      partType: document.getElementById('f_serial_parttype').value.trim(),
+      notes: document.getElementById('f_serial_notes').value.trim(),
+    };
+    closeSerialModal();
+    try {
+      if (isEditing) {
+        await client.models.SerialMapping.update({ id: idToSave, ...input });
+      } else {
+        await client.models.SerialMapping.create(input);
+      }
+    } catch (err) {
+      alert('Could not save this serial number: ' + err.message);
+    }
   });
 
   // ---- Backups modal ----
@@ -2064,6 +2462,21 @@
         allRows = items.map(toDisplayRow);
         renderSidebar();
         renderContent();
+      }
+    });
+
+    client.models.TimeEntry.observeQuery().subscribe({
+      next: ({ items }) => {
+        timeEntries = items;
+        if (viewMode === 'timeTracking') renderContent();
+      }
+    });
+
+    client.models.SerialMapping.observeQuery().subscribe({
+      next: ({ items }) => {
+        serialMappings = items;
+        renderSidebar();
+        if (viewMode === 'serialMapping') renderContent();
       }
     });
   }
