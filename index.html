@@ -946,11 +946,14 @@
 
   function renderSidebar() {
     const groups = getServerGroups(allRows);
-    let names = Array.from(groups.keys()).sort((a,b) => {
-      if (a === 'Uncategorized') return 1;
-      if (b === 'Uncategorized') return -1;
-      return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-    });
+
+    // Combine every model name known across all three data sources, so the
+    // sidebar stays useful even when one source (e.g. Parts) is empty.
+    const allNames = new Set(groups.keys());
+    timeEntries.forEach(t => allNames.add(normalize(t.model) || 'Uncategorized'));
+    serialMappings.forEach(s => allNames.add(normalize(s.model) || 'Uncategorized'));
+
+    let names = sortServerNames(Array.from(allNames));
 
     const q = searchEl.value.trim().toLowerCase();
     const ptFilter = partTypeFilterEl.value;
@@ -973,13 +976,20 @@
       names = names.filter(n => matchCounts.has(n));
     }
 
+    // Count shown next to each name matches whichever tab is currently open.
+    function countFor(name) {
+      if (matchCounts) return matchCounts.get(name) || 0;
+      if (viewMode === 'timeTracking') return timeEntries.filter(t => (normalize(t.model) || 'Uncategorized') === name).length;
+      if (viewMode === 'serialMapping') return serialMappings.filter(s => (normalize(s.model) || 'Uncategorized') === name).length;
+      return (groups.get(name) || []).length;
+    }
+
     serverListEl.innerHTML = '';
     names.forEach(name => {
       const div = document.createElement('div');
       const isActiveTab = viewMode === 'host' || viewMode === 'timeTracking' || viewMode === 'serialMapping';
       div.className = 'server-item' + (isActiveTab && name === activeServer && !q ? ' active' : '');
-      const count = matchCounts ? matchCounts.get(name) : groups.get(name).length;
-      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="count">${count}</span>`;
+      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="count">${countFor(name)}</span>`;
       div.onclick = () => {
         activeServer = name;
         selectedIds.clear();
@@ -998,6 +1008,10 @@
     if (q) {
       const totalMatches = Array.from(matchCounts.values()).reduce((a,b) => a+b, 0);
       statLineEl.textContent = `${totalMatches} matching part${totalMatches===1?'':'s'} across ${names.length} host model${names.length===1?'':'s'}`;
+    } else if (viewMode === 'timeTracking') {
+      statLineEl.textContent = `${timeEntries.length} time ${timeEntries.length===1?'entry':'entries'} across ${names.length} host model${names.length===1?'':'s'}`;
+    } else if (viewMode === 'serialMapping') {
+      statLineEl.textContent = `${serialMappings.length} serial number${serialMappings.length===1?'':'s'} across ${names.length} host model${names.length===1?'':'s'}`;
     } else {
       statLineEl.textContent = `${allRows.length} parts across ${names.length} host models`;
     }
