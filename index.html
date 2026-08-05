@@ -73,6 +73,8 @@
   .file-btn:hover { border-color: var(--accent); }
   .file-btn.accent { border-color: rgba(224,85,79,0.4); color: #ff9d97; }
   .file-btn.accent:hover { border-color: var(--no); background: rgba(224,85,79,0.1); }
+  .file-btn.accent-blue { border-color: rgba(79,140,255,0.4); color: var(--accent); font-weight: 700; }
+  .file-btn.accent-blue:hover { border-color: var(--accent); background: rgba(79,140,255,0.1); }
   .admin-menu-wrap { position: relative; }
   .admin-dropdown {
     display: none;
@@ -525,6 +527,14 @@
   <h1 id="pilotNameDisplay">MPN by Host Mapping Viewer</h1>
   <div class="sub">Browse parts grouped by server / host model. Add MPNs, export your additions at end of day, and hand them to whoever hosts this tool.</div>
   <div class="toolbar">
+    <div class="admin-menu-wrap">
+      <button class="file-btn accent-blue" id="pagesMenuBtn" type="button">☰ Pages</button>
+      <div class="admin-dropdown" id="pagesDropdown">
+        <button class="admin-item" id="gotoHostMappingBtn" type="button">MPN Host Mapping</button>
+        <button class="admin-item" id="gotoTimeTrackingBtn" type="button">⏱ Time Tracking</button>
+        <button class="admin-item" id="gotoSerialMappingBtn" type="button">🔢 Serial Numbers</button>
+      </div>
+    </div>
     <input type="text" id="search" placeholder="Search all hosts: MPN, APN, description, mfg...">
     <select id="partTypeFilter"><option value="">All part types</option></select>
     <select id="scannableFilter">
@@ -690,12 +700,6 @@
     <div id="notInEvNavItem" class="server-item nav-special">
       <span>⚠ Not in eViridis</span><span class="count" id="notInEvCount">0</span>
     </div>
-    <div id="timeTrackingNavItem" class="server-item nav-blue">
-      <span>⏱ Time Tracking</span>
-    </div>
-    <div id="serialMappingNavItem" class="server-item nav-blue">
-      <span>🔢 Serial Numbers</span><span class="count" id="serialMappingCount">0</span>
-    </div>
     <div class="group-label" style="margin-top:8px;">Server / Host Models</div>
     <div id="serverList"></div>
   </div>
@@ -844,7 +848,7 @@
 
   let allRows = [];
   let activeServer = null;
-  let viewMode = 'host'; // 'host' | 'notInEv'
+  let viewMode = 'serialMapping'; // 'host' | 'notInEv' | 'timeTracking' | 'serialMapping'
   let sortState = { col: null, dir: 1 };
   let selectedIds = new Set();
   let manufacturerIdByName = new Map();
@@ -859,6 +863,8 @@
   const fileInput = document.getElementById('fileInput');
   const addMpnBtn = document.getElementById('addMpnBtn');
   const adminMenuBtn = document.getElementById('adminMenuBtn');
+  const pagesMenuBtn = document.getElementById('pagesMenuBtn');
+  const pagesDropdown = document.getElementById('pagesDropdown');
   const adminDropdown = document.getElementById('adminDropdown');
   const modalOverlay = document.getElementById('modalOverlay');
   const addMpnForm = document.getElementById('addMpnForm');
@@ -885,8 +891,6 @@
   const backupsModalOverlay = document.getElementById('backupsModalOverlay');
   const closeBackupsModalBtn = document.getElementById('closeBackupsModalBtn');
   const backupsListEl = document.getElementById('backupsList');
-  const timeTrackingNavItem = document.getElementById('timeTrackingNavItem');
-  const serialMappingNavItem = document.getElementById('serialMappingNavItem');
   let timeEntries = [];
   let serialMappings = [];
   let timerRunning = false;
@@ -957,9 +961,6 @@
     const notInEvCount = allRows.filter(r => normalize(r["Added to eViridis"]).toLowerCase() !== 'yes').length;
     document.getElementById('notInEvCount').textContent = notInEvCount;
     document.getElementById('notInEvNavItem').classList.toggle('active', viewMode === 'notInEv' && !q);
-    timeTrackingNavItem.classList.toggle('active', viewMode === 'timeTracking');
-    serialMappingNavItem.classList.toggle('active', viewMode === 'serialMapping');
-    document.getElementById('serialMappingCount').textContent = serialMappings.length;
 
     // populate part type filter once
     const types = Array.from(new Set(allRows.map(r => normalize(r["Part Type"])).filter(Boolean))).sort();
@@ -968,19 +969,6 @@
       types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
     partTypeFilterEl.value = types.includes(currentVal) ? currentVal : '';
   }
-
-  timeTrackingNavItem.addEventListener('click', () => {
-    viewMode = 'timeTracking';
-    searchEl.value = '';
-    renderSidebar();
-    renderContent();
-  });
-  serialMappingNavItem.addEventListener('click', () => {
-    viewMode = 'serialMapping';
-    searchEl.value = '';
-    renderSidebar();
-    renderContent();
-  });
 
   document.getElementById('notInEvNavItem').addEventListener('click', () => {
     viewMode = 'notInEv';
@@ -1850,6 +1838,38 @@
   });
   cancelAddBtn.addEventListener('click', closeModal);
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+  // ---- Pages dropdown menu ----
+  pagesMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pagesDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (pagesDropdown.classList.contains('open') && !pagesDropdown.contains(e.target) && e.target !== pagesMenuBtn) {
+      pagesDropdown.classList.remove('open');
+    }
+  });
+  pagesDropdown.querySelectorAll('.admin-item').forEach(el => {
+    el.addEventListener('click', () => { pagesDropdown.classList.remove('open'); });
+  });
+  document.getElementById('gotoHostMappingBtn').addEventListener('click', () => {
+    viewMode = 'host';
+    searchEl.value = '';
+    renderSidebar();
+    renderContent();
+  });
+  document.getElementById('gotoTimeTrackingBtn').addEventListener('click', () => {
+    viewMode = 'timeTracking';
+    searchEl.value = '';
+    renderSidebar();
+    renderContent();
+  });
+  document.getElementById('gotoSerialMappingBtn').addEventListener('click', () => {
+    viewMode = 'serialMapping';
+    searchEl.value = '';
+    renderSidebar();
+    renderContent();
+  });
 
   // ---- Manufacturers config modal ----
   function renderMfgList() {
