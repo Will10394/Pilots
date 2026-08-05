@@ -55,6 +55,7 @@ const schema = a.schema({
   TimeEntry: a
     .model({
       label: a.string(),                   // what was being worked on
+      model: a.string(),                    // host model this time was logged against
       performedBy: a.string(),              // who did the work
       timedBy: a.string(),                  // who ran the stopwatch
       durationSeconds: a.integer().required(),
@@ -67,6 +68,7 @@ const schema = a.schema({
     .model({
       serialNumber: a.string().required(),
       mpn: a.string(),                      // links to an MPN (PWB) value
+      model: a.string(),                    // host model this serial number belongs to
       partType: a.string(),
       notes: a.string(),
     })

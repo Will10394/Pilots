@@ -459,6 +459,29 @@
   th.checkbox-col, td.checkbox-col { width: 32px; text-align: center; padding-left: 14px; padding-right: 4px; }
   input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 
+  .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(79,140,255,0.12);
+    border: 1px solid rgba(79,140,255,0.35);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    margin-bottom: 16px;
+  }
+  .filter-pill button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0;
+  }
+  .filter-pill button:hover { text-decoration: underline; }
+
   .stopwatch-card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -675,6 +698,11 @@
       <div class="form-row">
         <label>Serial Number</label>
         <input type="text" id="f_serial" placeholder="e.g. SN-2026-00417" required>
+      </div>
+      <div class="form-row">
+        <label>Model / Host</label>
+        <input type="text" id="f_serial_model" list="serialModelOptions" placeholder="e.g. PowerEdge R730xd">
+        <datalist id="serialModelOptions"></datalist>
       </div>
       <div class="form-row">
         <label>MPN</label>
@@ -948,10 +976,22 @@
     serverListEl.innerHTML = '';
     names.forEach(name => {
       const div = document.createElement('div');
-      div.className = 'server-item' + (viewMode === 'host' && name === activeServer && !q ? ' active' : '');
+      const isActiveTab = viewMode === 'host' || viewMode === 'timeTracking' || viewMode === 'serialMapping';
+      div.className = 'server-item' + (isActiveTab && name === activeServer && !q ? ' active' : '');
       const count = matchCounts ? matchCounts.get(name) : groups.get(name).length;
       div.innerHTML = `<span>${escapeHtml(name)}</span><span class="count">${count}</span>`;
-      div.onclick = () => { viewMode = 'host'; activeServer = name; selectedIds.clear(); searchEl.value = ''; renderSidebar(); renderContent(); };
+      div.onclick = () => {
+        activeServer = name;
+        selectedIds.clear();
+        searchEl.value = '';
+        if (viewMode === 'timeTracking') {
+          stopwatchModel = name;
+        } else if (viewMode !== 'serialMapping') {
+          viewMode = 'host';
+        }
+        renderSidebar();
+        renderContent();
+      };
       serverListEl.appendChild(div);
     });
 
@@ -1543,6 +1583,7 @@
   let stopwatchLabelValue = '';
   let stopwatchPerformedBy = '';
   let stopwatchTimedBy = '';
+  let stopwatchModel = '';
 
   function formatDuration(ms) {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -1577,6 +1618,7 @@
     const label = stopwatchLabelValue.trim();
     const performedBy = stopwatchPerformedBy.trim();
     const timedBy = stopwatchTimedBy.trim();
+    const model = stopwatchModel.trim();
     const startedAtIso = timerStartedAt ? new Date(timerStartedAt).toISOString() : new Date().toISOString();
     const endedAtIso = new Date().toISOString();
     const durationSeconds = Math.max(1, Math.round(elapsedMs / 1000));
@@ -1585,12 +1627,12 @@
     timerStartedAt = null;
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     stopwatchLabelValue = '';
-    // Performed by / Timed by usually stay the same across back-to-back
+    // Performed by / Timed by / Model usually stay the same across back-to-back
     // sessions, so they're intentionally NOT cleared here.
     renderContent();
 
     try {
-      await client.models.TimeEntry.create({ label, performedBy, timedBy, durationSeconds, startedAt: startedAtIso, endedAt: endedAtIso });
+      await client.models.TimeEntry.create({ label, model, performedBy, timedBy, durationSeconds, startedAt: startedAtIso, endedAt: endedAtIso });
     } catch (err) {
       alert('Could not save this time entry: ' + err.message);
     }
@@ -1607,11 +1649,13 @@
   }
 
   function exportTimeLog() {
-    const sorted = timeEntries.slice().sort((a,b) => new Date(a.startedAt || 0) - new Date(b.startedAt || 0));
-    const aoa = [["Label","Performed By","Timed By","Duration (h:mm:ss)","Duration (seconds)","Started","Ended"]];
+    const filtered = activeServer ? timeEntries.filter(t => normalize(t.model) === activeServer) : timeEntries;
+    const sorted = filtered.slice().sort((a,b) => new Date(a.startedAt || 0) - new Date(b.startedAt || 0));
+    const aoa = [["Label","Model","Performed By","Timed By","Duration (h:mm:ss)","Duration (seconds)","Started","Ended"]];
     sorted.forEach(t => {
       aoa.push([
         t.label || '',
+        t.model || '',
         t.performedBy || '',
         t.timedBy || '',
         formatDuration((t.durationSeconds || 0) * 1000),
@@ -1627,18 +1671,31 @@
   }
 
   function renderTimeTrackingView() {
-    const sorted = timeEntries.slice().sort((a,b) => new Date(b.createdAt || b.startedAt || 0) - new Date(a.createdAt || a.startedAt || 0));
-    const totalSeconds = timeEntries.reduce((sum, t) => sum + (t.durationSeconds || 0), 0);
+    const allServerNames = sortServerNames(Array.from(new Set(
+      allRows.flatMap(r => Array.isArray(r["Servers"]) ? r["Servers"] : [])
+    ))).filter(s => s !== 'Uncategorized');
+
+    const filtered = activeServer ? timeEntries.filter(t => normalize(t.model) === activeServer) : timeEntries;
+    const sorted = filtered.slice().sort((a,b) => new Date(b.createdAt || b.startedAt || 0) - new Date(a.createdAt || a.startedAt || 0));
+    const totalSeconds = filtered.reduce((sum, t) => sum + (t.durationSeconds || 0), 0);
 
     let html = `<div class="content-header">
         <h2>Time Tracking</h2>
-        <span class="count-pill">${timeEntries.length} entr${timeEntries.length === 1 ? 'y' : 'ies'} logged · ${formatDuration(totalSeconds * 1000)} total</span>
+        <span class="count-pill">${filtered.length} entr${filtered.length === 1 ? 'y' : 'ies'} logged · ${formatDuration(totalSeconds * 1000)} total</span>
       </div>`;
+
+    if (activeServer) {
+      html += `<div class="filter-pill">Showing: <strong>${escapeHtml(activeServer)}</strong> <button id="clearTimeFilterBtn" type="button">&times; clear</button></div>`;
+    }
 
     html += `<div class="stopwatch-card">
         <div class="stopwatch-display${timerRunning ? ' running' : ''}" id="stopwatchDisplay">${formatDuration(currentTimerMs())}</div>
         <div class="stopwatch-label-row">
           <input type="text" id="stopwatchLabelInput" placeholder="What are you working on? (optional)" value="${escapeHtml(stopwatchLabelValue)}">
+        </div>
+        <div class="stopwatch-label-row">
+          <input type="text" id="stopwatchModelInput" list="stopwatchModelOptions" placeholder="Model / host (optional)" value="${escapeHtml(stopwatchModel)}">
+          <datalist id="stopwatchModelOptions">${allServerNames.map(s => `<option value="${escapeHtml(s)}">`).join('')}</datalist>
         </div>
         <div class="stopwatch-label-row">
           <input type="text" id="stopwatchPerformedByInput" placeholder="Performed by" value="${escapeHtml(stopwatchPerformedBy)}">
@@ -1653,16 +1710,17 @@
 
     html += `<div class="content-header">
         <h2 style="font-size:15px;">Log</h2>
-        ${timeEntries.length ? '<button class="file-btn" id="exportTimeLogBtn" type="button">Export time log (.xlsx)</button>' : ''}
+        ${filtered.length ? '<button class="file-btn" id="exportTimeLogBtn" type="button">Export time log (.xlsx)</button>' : ''}
       </div>`;
 
     if (sorted.length === 0) {
-      html += `<div class="empty-state">No time entries yet — hit Start above, then "Stop &amp; Save" when you're done.</div>`;
+      html += `<div class="empty-state">${activeServer ? `No time entries logged for "${escapeHtml(activeServer)}" yet.` : 'No time entries yet — hit Start above, then "Stop &amp; Save" when you\'re done.'}</div>`;
     } else {
-      html += `<table><thead><tr><th>Label</th><th>Performed By</th><th>Timed By</th><th>Duration</th><th>Started</th><th>Ended</th><th>&nbsp;</th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th>Label</th><th>Model</th><th>Performed By</th><th>Timed By</th><th>Duration</th><th>Started</th><th>Ended</th><th>&nbsp;</th></tr></thead><tbody>`;
       sorted.forEach(t => {
         html += `<tr data-id="${escapeHtml(t.id)}">
             <td>${escapeHtml(t.label || '—')}</td>
+            <td>${escapeHtml(t.model || '—')}</td>
             <td>${escapeHtml(t.performedBy || '—')}</td>
             <td>${escapeHtml(t.timedBy || '—')}</td>
             <td class="mono">${formatDuration((t.durationSeconds || 0) * 1000)}</td>
@@ -1676,8 +1734,17 @@
 
     contentEl.innerHTML = html;
 
+    const clearFilterBtn = document.getElementById('clearTimeFilterBtn');
+    if (clearFilterBtn) clearFilterBtn.addEventListener('click', () => {
+      activeServer = null;
+      renderSidebar();
+      renderContent();
+    });
+
     const labelInput = document.getElementById('stopwatchLabelInput');
     if (labelInput) labelInput.addEventListener('input', (e) => { stopwatchLabelValue = e.target.value; });
+    const modelInput = document.getElementById('stopwatchModelInput');
+    if (modelInput) modelInput.addEventListener('input', (e) => { stopwatchModel = e.target.value; });
     const performedByInput = document.getElementById('stopwatchPerformedByInput');
     if (performedByInput) performedByInput.addEventListener('input', (e) => { stopwatchPerformedBy = e.target.value; });
     const timedByInput = document.getElementById('stopwatchTimedByInput');
@@ -1713,10 +1780,15 @@
 
     const mpns = Array.from(new Set(allRows.map(r => normalize(r['MPN (PWB)'])).filter(Boolean))).sort();
     const partTypes = Array.from(new Set(allRows.map(r => normalize(r['Part Type'])).filter(Boolean))).sort();
+    const modelNames = sortServerNames(Array.from(new Set(
+      allRows.flatMap(r => Array.isArray(r["Servers"]) ? r["Servers"] : [])
+    ))).filter(s => s !== 'Uncategorized');
     document.getElementById('serialMpnOptions').innerHTML = mpns.map(m => `<option value="${escapeHtml(m)}">`).join('');
     document.getElementById('serialPartTypeOptions').innerHTML = partTypes.map(p => `<option value="${escapeHtml(p)}">`).join('');
+    document.getElementById('serialModelOptions').innerHTML = modelNames.map(s => `<option value="${escapeHtml(s)}">`).join('');
 
     document.getElementById('f_serial').value = rec ? (rec.serialNumber || '') : '';
+    document.getElementById('f_serial_model').value = rec ? (rec.model || '') : (activeServer || '');
     document.getElementById('f_serial_mpn').value = rec ? (rec.mpn || '') : '';
     document.getElementById('f_serial_parttype').value = rec ? (rec.partType || '') : '';
     document.getElementById('f_serial_notes').value = rec ? (rec.notes || '') : '';
@@ -1731,9 +1803,10 @@
   }
 
   function exportSerialMappings() {
-    const sorted = serialMappings.slice().sort((a,b) => normalize(a.serialNumber).localeCompare(normalize(b.serialNumber), undefined, {numeric:true, sensitivity:'base'}));
-    const aoa = [["Serial Number","MPN","Part Type","Notes"]];
-    sorted.forEach(s => aoa.push([s.serialNumber || '', s.mpn || '', s.partType || '', s.notes || '']));
+    const filtered = activeServer ? serialMappings.filter(s => normalize(s.model) === activeServer) : serialMappings;
+    const sorted = filtered.slice().sort((a,b) => normalize(a.serialNumber).localeCompare(normalize(b.serialNumber), undefined, {numeric:true, sensitivity:'base'}));
+    const aoa = [["Serial Number","Model","MPN","Part Type","Notes"]];
+    sorted.forEach(s => aoa.push([s.serialNumber || '', s.model || '', s.mpn || '', s.partType || '', s.notes || '']));
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Serial Numbers');
@@ -1741,25 +1814,31 @@
   }
 
   function renderSerialMappingView() {
-    const sorted = serialMappings.slice().sort((a,b) => normalize(a.serialNumber).localeCompare(normalize(b.serialNumber), undefined, {numeric:true, sensitivity:'base'}));
+    const filtered = activeServer ? serialMappings.filter(s => normalize(s.model) === activeServer) : serialMappings;
+    const sorted = filtered.slice().sort((a,b) => normalize(a.serialNumber).localeCompare(normalize(b.serialNumber), undefined, {numeric:true, sensitivity:'base'}));
 
     let html = `<div class="content-header">
         <h2>Serial Numbers</h2>
-        <span class="count-pill">${serialMappings.length} mapped</span>
+        <span class="count-pill">${filtered.length} mapped</span>
       </div>`;
+
+    if (activeServer) {
+      html += `<div class="filter-pill">Showing: <strong>${escapeHtml(activeServer)}</strong> <button id="clearSerialFilterBtn" type="button">&times; clear</button></div>`;
+    }
 
     html += `<div style="margin-bottom:14px; display:flex; gap:10px;">
         <button class="file-btn" id="addSerialBtn" type="button">+ Add Serial Number</button>
-        ${serialMappings.length ? '<button class="file-btn" id="exportSerialBtn" type="button">Export (.xlsx)</button>' : ''}
+        ${filtered.length ? '<button class="file-btn" id="exportSerialBtn" type="button">Export (.xlsx)</button>' : ''}
       </div>`;
 
     if (sorted.length === 0) {
-      html += `<div class="empty-state">No serial numbers mapped yet — use "+ Add Serial Number" to link a serial to an MPN type. Handy for organizing inventory at the start of a pilot.</div>`;
+      html += `<div class="empty-state">${activeServer ? `No serial numbers mapped for "${escapeHtml(activeServer)}" yet.` : 'No serial numbers mapped yet — use "+ Add Serial Number" to link a serial to an MPN type. Handy for organizing inventory at the start of a pilot.'}</div>`;
     } else {
-      html += `<table><thead><tr><th>Serial Number</th><th>MPN</th><th>Part Type</th><th>Notes</th><th>&nbsp;</th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th>Serial Number</th><th>Model</th><th>MPN</th><th>Part Type</th><th>Notes</th><th>&nbsp;</th></tr></thead><tbody>`;
       sorted.forEach(s => {
         html += `<tr data-id="${escapeHtml(s.id)}">
             <td class="mono">${escapeHtml(s.serialNumber || '—')}</td>
+            <td>${escapeHtml(s.model || '—')}</td>
             <td class="mono">${escapeHtml(s.mpn || '—')}</td>
             <td>${escapeHtml(s.partType || '—')}</td>
             <td>${escapeHtml(s.notes || '—')}</td>
@@ -1773,6 +1852,13 @@
     }
 
     contentEl.innerHTML = html;
+
+    const clearFilterBtn = document.getElementById('clearSerialFilterBtn');
+    if (clearFilterBtn) clearFilterBtn.addEventListener('click', () => {
+      activeServer = null;
+      renderSidebar();
+      renderContent();
+    });
 
     document.getElementById('addSerialBtn').addEventListener('click', () => openSerialModal());
     const exportBtn = document.getElementById('exportSerialBtn');
@@ -1952,6 +2038,7 @@
     const idToSave = editingSerialId;
     const input = {
       serialNumber,
+      model: document.getElementById('f_serial_model').value.trim(),
       mpn: document.getElementById('f_serial_mpn').value.trim(),
       partType: document.getElementById('f_serial_parttype').value.trim(),
       notes: document.getElementById('f_serial_notes').value.trim(),
