@@ -51,6 +51,24 @@ const schema = a.schema({
       data: a.string(),                    // JSON snapshot: { rows, manufacturers }
     })
     .authorization((allow) => [allow.publicApiKey()]),
+
+  TimeEntry: a
+    .model({
+      label: a.string(),                   // what was being worked on
+      durationSeconds: a.integer().required(),
+      startedAt: a.string(),                // ISO timestamp
+      endedAt: a.string(),                  // ISO timestamp
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  SerialMapping: a
+    .model({
+      serialNumber: a.string().required(),
+      mpn: a.string(),                      // links to an MPN (PWB) value
+      partType: a.string(),
+      notes: a.string(),
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
