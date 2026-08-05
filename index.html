@@ -586,6 +586,7 @@
         <button class="admin-item" id="exportNotInEvBtn" type="button">Export Not-in-eViridis (.xlsx)</button>
         <div class="admin-divider"></div>
         <button class="admin-item danger" id="newPilotBtn" type="button">Start new pilot (clean slate for everyone)</button>
+        <button class="admin-item danger" id="wipeAllBtn" type="button">Wipe ENTIRE database (all tables)</button>
       </div>
     </div>
     <span class="stat" id="statLine"></span>
@@ -907,6 +908,7 @@
   const exportNewEntriesBtn = document.getElementById('exportNewEntriesBtn');
   const reloadDefaultBtn = document.getElementById('reloadDefaultBtn');
   const newPilotBtn = document.getElementById('newPilotBtn');
+  const wipeAllBtn = document.getElementById('wipeAllBtn');
   const manageMfgBtn = document.getElementById('manageMfgBtn');
   const mfgModalOverlay = document.getElementById('mfgModalOverlay');
   const serialModalOverlay = document.getElementById('serialModalOverlay');
@@ -2417,9 +2419,9 @@
 
   // ---- Start New Pilot: permanently wipe every shared part, for everyone ----
   newPilotBtn.addEventListener('click', async () => {
-    const step1 = confirm('Start a new pilot?\n\nThis will PERMANENTLY delete every part and host model for EVERYONE using this tool — this is a real, shared database, not a local copy. Make sure anything worth keeping has already been exported.\n\nContinue?');
+    const step1 = confirm('Start a new pilot?\n\nThis will PERMANENTLY delete every part, time log entry, and serial number mapping for EVERYONE using this tool — this is a real, shared database, not a local copy. Make sure anything worth keeping has already been exported.\n\nContinue?');
     if (!step1) return;
-    const step2 = confirm('Are you absolutely sure? This clears the shared list down to zero parts for the whole team, right now.');
+    const step2 = confirm('Are you absolutely sure? This clears parts, the time log, AND serial number mappings down to zero for the whole team, right now.');
     if (!step2) return;
 
     const newName = prompt('Name for the new pilot (shown in the header, for everyone):', pilotName || '');
@@ -2428,18 +2430,68 @@
     newPilotBtn.disabled = true;
     newPilotBtn.textContent = 'Clearing…';
     try {
-      const allParts = await listAllRecords(client.models.Part);
-      const idsToDelete = allParts.map(p => p.id);
-      await runWithConcurrency(idsToDelete, (id) => client.models.Part.delete({ id }), 15);
+      const [allParts, allTimeEntries, allSerials] = await Promise.all([
+        listAllRecords(client.models.Part),
+        listAllRecords(client.models.TimeEntry),
+        listAllRecords(client.models.SerialMapping),
+      ]);
+      await Promise.all([
+        runWithConcurrency(allParts.map(p => p.id), (id) => client.models.Part.delete({ id }), 15),
+        runWithConcurrency(allTimeEntries.map(t => t.id), (id) => client.models.TimeEntry.delete({ id }), 15),
+        runWithConcurrency(allSerials.map(s => s.id), (id) => client.models.SerialMapping.delete({ id }), 15),
+      ]);
       if (pilotConfigId) {
         await client.models.PilotConfig.update({ id: pilotConfigId, pilotName: newName.trim() });
       }
-      alert('Clean slate ready for everyone. Add MPNs or bulk-import a source .xlsx to start building the new pilot\'s list.');
+      activeServer = null;
+      alert('Clean slate ready for everyone — parts, time log, and serial numbers are all cleared. Add MPNs or bulk-import a source .xlsx to start building the new pilot\'s list.');
     } catch (err) {
       alert('Something went wrong clearing the shared data: ' + err.message);
     } finally {
       newPilotBtn.disabled = false;
       newPilotBtn.textContent = 'Start new pilot (clean slate)';
+    }
+  });
+
+  wipeAllBtn.addEventListener('click', async () => {
+    const step1 = confirm(
+      'WIPE THE ENTIRE DATABASE?\n\n' +
+      'This permanently deletes EVERYTHING for EVERYONE, across every table: ' +
+      'all parts, the full time log, all serial number mappings, the entire ' +
+      'manufacturers list, and every saved backup. There is no undo.\n\n' +
+      'Make sure anything worth keeping has already been exported.\n\nContinue?'
+    );
+    if (!step1) return;
+    const typed = prompt('Type WIPE (all caps) to confirm you want to permanently delete everything, across every table:');
+    if (typed !== 'WIPE') {
+      alert('Cancelled — nothing was deleted.');
+      return;
+    }
+
+    wipeAllBtn.disabled = true;
+    wipeAllBtn.textContent = 'Wiping…';
+    try {
+      const [allParts, allMfgs, allTimeEntries, allSerials, allBackups] = await Promise.all([
+        listAllRecords(client.models.Part),
+        listAllRecords(client.models.Manufacturer),
+        listAllRecords(client.models.TimeEntry),
+        listAllRecords(client.models.SerialMapping),
+        listAllRecords(client.models.Backup),
+      ]);
+      await Promise.all([
+        runWithConcurrency(allParts.map(p => p.id), (id) => client.models.Part.delete({ id }), 15),
+        runWithConcurrency(allMfgs.map(m => m.id), (id) => client.models.Manufacturer.delete({ id }), 15),
+        runWithConcurrency(allTimeEntries.map(t => t.id), (id) => client.models.TimeEntry.delete({ id }), 15),
+        runWithConcurrency(allSerials.map(s => s.id), (id) => client.models.SerialMapping.delete({ id }), 15),
+        runWithConcurrency(allBackups.map(b => b.id), (id) => client.models.Backup.delete({ id }), 15),
+      ]);
+      activeServer = null;
+      alert('Everything has been wiped — parts, manufacturers, time log, serial numbers, and backups are all empty across the whole database. It will stay empty; nothing will auto-repopulate on the next load.');
+    } catch (err) {
+      alert('Something went wrong wiping the database: ' + err.message);
+    } finally {
+      wipeAllBtn.disabled = false;
+      wipeAllBtn.textContent = 'Wipe ENTIRE database (all tables)';
     }
   });
 
@@ -2563,28 +2615,32 @@
 
   async function boot() {
     try {
-      const { data: existingParts } = await client.models.Part.list({ limit: 1 });
-      if (existingParts.length === 0 && EMBEDDED_DATA.length > 0) {
-        const seedRows = dedupeRows(EMBEDDED_DATA);
-        contentEl.innerHTML = `<div class="empty-state">First-time setup — loading ${seedRows.length} starter parts into the shared database. This only happens once and may take a minute…</div>`;
-        await runWithConcurrency(seedRows, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 15);
-      }
-
-      const { data: existingMfgs } = await client.models.Manufacturer.list({ limit: 1 });
-      if (existingMfgs.length === 0 && MFG_CONFIG.length > 0) {
-        await runWithConcurrency(MFG_CONFIG, (name) => client.models.Manufacturer.create({ name }), 15);
-      }
-
       const { data: pilotRows } = await client.models.PilotConfig.list();
+      let pilotRecord;
       if (pilotRows.length === 0) {
-        const { data: created } = await client.models.PilotConfig.create({ pilotName: PILOT_NAME });
-        pilotConfigId = created.id;
-        pilotName = created.pilotName || '';
+        const { data: created } = await client.models.PilotConfig.create({ pilotName: PILOT_NAME, hasSeeded: false });
+        pilotRecord = created;
       } else {
-        pilotConfigId = pilotRows[0].id;
-        pilotName = pilotRows[0].pilotName || '';
+        pilotRecord = pilotRows[0];
       }
+      pilotConfigId = pilotRecord.id;
+      pilotName = pilotRecord.pilotName || '';
       renderPilotName();
+
+      // Seed starter data exactly once, ever — tracked by this flag rather
+      // than "is the table empty," so a deliberate wipe stays wiped instead
+      // of silently repopulating on the next page load.
+      if (!pilotRecord.hasSeeded) {
+        if (EMBEDDED_DATA.length > 0) {
+          const seedRows = dedupeRows(EMBEDDED_DATA);
+          contentEl.innerHTML = `<div class="empty-state">First-time setup — loading ${seedRows.length} starter parts into the shared database. This only happens once and may take a minute…</div>`;
+          await runWithConcurrency(seedRows, (row) => client.models.Part.create(toCreateInput(Object.assign({ _manual: false }, row))), 15);
+        }
+        if (MFG_CONFIG.length > 0) {
+          await runWithConcurrency(MFG_CONFIG, (name) => client.models.Manufacturer.create({ name }), 15);
+        }
+        await client.models.PilotConfig.update({ id: pilotConfigId, hasSeeded: true });
+      }
     } catch (err) {
       contentEl.innerHTML = `<div class="empty-state">Could not connect to the shared database: ${escapeHtml(err.message)}</div>`;
       return;

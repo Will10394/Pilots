@@ -41,6 +41,7 @@ const schema = a.schema({
   PilotConfig: a
     .model({
       pilotName: a.string(),
+      hasSeeded: a.boolean(),   // tracks whether starter data has ever been loaded — prevents auto-reseeding after a wipe
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
